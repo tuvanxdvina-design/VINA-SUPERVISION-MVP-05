@@ -12,7 +12,7 @@ const { createTestDb } = require('../lib/testDb');
 
 const PORT = 3103;
 const BASE = `http://127.0.0.1:${PORT}`;
-const DB_URL = process.env.UI_TEST_DB_URL || 'postgres://postgres:postgres@127.0.0.1:5434/vina_ui_claude';
+const DB_URL = process.env.UI_TEST_DB_URL || 'postgres://postgres:postgres@127.0.0.1:5435/vina_ui_claude';
 const ART = path.join(__dirname, '..', 'ui-artifacts');
 
 let db = null, server = null, browser = null;
@@ -125,7 +125,7 @@ async function loginViaForm(page, who, password = 'demo') {
   await page.click('#loginButton');
 }
 
-// "Báo cáo ngày" (daily) không còn nút riêng trên thanh nav (gộp vào "Báo cáo", bản 2026-10-14.3) —
+// "Báo cáo ngày" (daily) không còn nút riêng trên thanh nav (gộp vào "Báo cáo", bản MVP-05) —
 // vào qua nút "Báo cáo" rồi bấm tab trong trang "📝 Báo cáo ngày (cá nhân)".
 async function openPage(page, dataPage) {
   if (dataPage === 'daily') {

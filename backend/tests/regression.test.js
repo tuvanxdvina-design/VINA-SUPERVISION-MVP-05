@@ -1,7 +1,7 @@
 // ============================================================================
 // KIỂM THỬ HỒI QUY (dành cho người phát triển) — chạy trên CSDL THỬ RIÊNG, không đụng dữ liệu thật.
 // Yêu cầu: PostgreSQL truy cập được bằng psql; biến môi trường TEST_DB_URL, ví dụ
-//   TEST_DB_URL=postgres://vina_user:vina_password_123@127.0.0.1:5434/vina_regression
+//   TEST_DB_URL=postgres://vina_user:vina_password_123@127.0.0.1:5435/vina_regression
 // Chạy (tại backend): node --test tests/regression.test.js
 // Kịch bản: dựng CSDL từ schema gốc + migration CŨ, nạp dữ liệu lỗi giống thực tế
 // (nhân sự trùng tên NFD/khoảng trắng, nhật ký không có ca, mã ca MORNING, phân công Admin tự sinh),

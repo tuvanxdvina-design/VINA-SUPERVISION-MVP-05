@@ -4,9 +4,9 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: vina_supervision_mvp04
+      POSTGRES_DB: vina_supervision_mvp05
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./schema-VINA-PROD-01.sql:/docker-entrypoint-initdb.d/01-schema.sql

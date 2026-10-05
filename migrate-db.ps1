@@ -7,7 +7,7 @@
 param([switch]$Status, [switch]$AutoBackup)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$db = 'vina_supervision_mvp04'
+$db = 'vina_supervision_mvp05'
 
 Push-Location $root
 try {

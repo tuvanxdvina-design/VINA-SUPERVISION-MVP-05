@@ -1,12 +1,12 @@
 # Restore a custom-format backup into an isolated database and compare every table.
-# This script only accepts a dedicated test database name and never changes vina_supervision_mvp04.
+# This script only accepts a dedicated test database name and never changes vina_supervision_mvp05.
 param(
   [Parameter(Mandatory = $true)][string]$BackupPath,
   [string]$TestDatabase = 'vina_restore_verify_manual'
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$sourceDatabase = 'vina_supervision_mvp04'
+$sourceDatabase = 'vina_supervision_mvp05'
 
 if ($TestDatabase -notmatch '^vina_restore_verify_[a-z0-9_]+$') {
   throw 'TestDatabase must start with vina_restore_verify_ and contain only lowercase letters, numbers, or underscores.'

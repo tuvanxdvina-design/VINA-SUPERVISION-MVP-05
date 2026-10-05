@@ -15,7 +15,7 @@ if errorlevel 1 (
   endlocal
   exit /b 2
 )
-set TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5434/%DB%
+set TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5435/%DB%
 for /f "delims=" %%I in ('docker compose -f "%~dp0..\..\docker-compose.yml" ps -q postgres') do set DB_CONTAINER=%%I
 if "%DB_CONTAINER%"=="" exit /b 3
 cd /d %~dp0..

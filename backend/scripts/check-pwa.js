@@ -1,6 +1,6 @@
 const { chromium } = require('playwright-core');
 
-const baseUrl = (process.argv[2] || 'http://127.0.0.1:3003').replace(/\/$/, '');
+const baseUrl = (process.argv[2] || 'http://127.0.0.1:3004').replace(/\/$/, '');
 
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });

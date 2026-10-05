@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20261013 — Tệp đính kèm (bản ký/scan) cho "Chất lượng công trình" (issues)
+-- 20261005_07 — Tệp đính kèm (bản ký/scan) cho "Chất lượng công trình" (issues)
 --   Trước đây file "isignedFile" chỉ lưu base64 trong details JSONB, chỉ tồn tại trên trình duyệt
 --   (api.js issueDetailsPayload() cắt bỏ .data trước khi đồng bộ) — mất khi đổi thiết bị, cùng lỗi
 --   đã sửa cho Hồ sơ ở Đợt 3. Nay lưu nhị phân qua fileStore (giống project_personnel_files).

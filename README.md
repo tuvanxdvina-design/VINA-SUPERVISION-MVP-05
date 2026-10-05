@@ -1,29 +1,92 @@
-# VINA-SUPERVISION MVP-04 — chạy thử có kiểm soát
+# VINA-SUPERVISION MVP-05 - ban cai tien chay doc lap
 
-Bản này fork từ MVP-03 (09/10/2026) để sửa lỗi mà không đụng bản MVP-03 đang chạy thật. Ứng dụng MVP-04 chạy trên máy này: giao diện `http://localhost:8082/`, API `http://localhost:3003/`, PostgreSQL trong Docker qua cổng máy `5434`, DB `vina_supervision_mvp04`. Các cổng chỉ lắng nghe trên `127.0.0.1` và được tách khỏi MVP-03 (8081/3002/5433) cùng các phiên bản dự án khác.
+MVP-05 duoc tao ngay 05/10/2026 tu MVP-04 de tiep tuc kiem tra va hoan thien loi con ton tai. Day la **ban cai tien chay doc lap**, khong ghi de MVP-03 hoac MVP-04.
 
-## Khởi động
+## Dia chi
 
-Yêu cầu Docker Desktop, Node.js, Python và thư mục `backend/node_modules` đã được cài. Chạy `run.bat` trong thư mục dự án. Tập lệnh khởi động cơ sở dữ liệu, API và giao diện, sau đó kiểm tra kết nối. Có thể chạy lại mà không tạo thêm máy chủ.
+- Giao dien phu: `http://localhost:8083/`
+- Giao dien/API chinh: `http://localhost:3004/`
+- Health: `http://localhost:3004/health`
+- PostgreSQL Docker: cong may `5435`
+- Database: `vina_supervision_mvp05`
 
-Kiểm tra `http://localhost:3003/health`: kết quả cần có `status: OK` và `database: connected`. Nếu khởi động lỗi, xem `runtime-logs/backend.err.log` và `runtime-logs/frontend.err.log`.
+| Ban | Giao dien | API | PostgreSQL | Database |
+|---|---:|---:|---:|---|
+| MVP-03 | 8081 | 3002 | 5433 | `vina_supervision` |
+| MVP-04 | 8082 | 3003 | 5434 | `vina_supervision_mvp04` |
+| MVP-05 | 8083 | 3004 | 5435 | `vina_supervision_mvp05` |
 
-## Phạm vi bản chạy thử
+## Cai dat
 
-- Hệ thống đang chạy ở chế độ `production`; tài khoản demo đã bị vô hiệu hóa. Mỗi người sử dụng tài khoản riêng và chỉ thấy các công trình được phân công.
-- Công trình, tiến độ, nhật ký, hồ sơ, tệp đính kèm, nội dung chất lượng, nhân sự, phân quyền, quy trình duyệt và thùng rác được lưu tập trung trong PostgreSQL/thư mục tải lên của máy chủ.
-- Trình duyệt chỉ giữ phiên đăng nhập, bộ nhớ đệm giao diện và hàng đợi tạm khi mất kết nối; đây không phải nguồn dữ liệu chính.
-- Tệp chờ khi thiết bị mất mạng được giữ bằng IndexedDB, không nhúng base64 vào `localStorage`. Ảnh lớn được tối ưu tối đa khoảng 2560 px trước khi xếp hàng; tệp chỉ bị xóa khỏi hàng đợi sau khi máy chủ xác nhận lưu thành công.
-- Hợp đồng công trình và ảnh nhật ký lưu trong kho `backend/uploads` theo SHA-256; PostgreSQL lưu metadata và quyền truy cập. Hồ sơ/báo cáo hiện gửi nhị phân trực tiếp tới máy chủ. Không được gửi duyệt nhật ký khi còn tệp chờ đồng bộ.
-- Nhật ký và hồ sơ đi theo quy trình nháp → gửi duyệt → phê duyệt/trả lại → khóa. Quyền xem, thêm, sửa, tải xuống, duyệt và xóa được kiểm tra tại máy chủ theo từng công trình.
-- Ứng dụng có thể cài theo chuẩn PWA trên Windows, Android và iPhone nhưng vẫn kết nối cùng một máy chủ dữ liệu.
+1. Cai Docker Desktop, Node.js va Python.
+2. Mo PowerShell tai thu muc `VINA-SUPERVISION-MVP-05`.
+3. Cai thu vien backend:
 
-## Giới hạn
+```powershell
+cd backend
+npm ci
+cd ..
+```
 
-Đây là bản chạy thử nội bộ qua mạng Tailscale riêng, không mở ra Internet công cộng. Máy chủ văn phòng, Docker Desktop và Tailscale phải hoạt động để thiết bị khác đọc hoặc cập nhật dữ liệu. Cần tiếp tục nghiệm thu thực địa về chất lượng mạng, dung lượng ảnh/tệp, xung đột khi nhiều người cùng sửa và quy trình khôi phục sau sự cố trước khi vận hành chính thức.
+4. Tao `backend\.env` tu `backend\.env.example`.
+5. Doi `DB_PASSWORD` va `JWT_SECRET` thanh chuoi rieng.
+6. Chay:
 
-Các chuỗi cũ đã mất dấu thành dấu `?` trong nội dung nhật ký PostgreSQL cần đối chiếu bản gốc trước khi sửa; việc đổi mã hóa tệp không thể khôi phục những ký tự đã mất trong dữ liệu.
+```powershell
+.\run.bat
+```
 
-## Chạy trên nhiều thiết bị
+## Kiem tra
 
-Địa chỉ Tailscale `https://desktop-e9suj00.tailc548b7.ts.net/` trong `DEPLOY-MULTISITE.md` là của **MVP-03**, chưa áp dụng cho MVP-04. MVP-04 hiện chỉ chạy trên `127.0.0.1`, chưa mở qua Tailscale — nếu cần mở, sửa `enable-tailnet.ps1` đã trỏ đúng cổng `3003` rồi nhưng phải đăng ký một serve/funnel riêng, không dùng chung địa chỉ trên.
+Mo:
+
+```text
+http://localhost:3004/health
+```
+
+Ket qua can co:
+
+- `status: OK`
+- `database: connected`
+- `migrations_pending: []`
+
+## Su dung
+
+Mo ung dung tai:
+
+```text
+http://localhost:3004/
+```
+
+Hoac duong giao dien phu:
+
+```text
+http://localhost:8083/
+```
+
+Nen dung `http://localhost:3004/` khi kiem thu vi duong nay lay truc tiep ma nguon moi nhat.
+
+## Kiem thu nhanh
+
+```powershell
+backend\scripts\run-regression.cmd
+backend\scripts\run-ui-tests.cmd
+powershell -NoProfile -ExecutionPolicy Bypass -File .\backup-db.ps1 -Label manual
+```
+
+## Chay tren nhieu thiet bi
+
+MVP-05 hien chi chay local. Neu can mo qua Tailscale, dung:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\enable-tailnet.ps1
+```
+
+Phai dang ky dia chi rieng cho MVP-05, khong dung chung dia chi cua MVP-03 hoac MVP-04.
+
+## Ghi chu
+
+- MVP-05 la ban cai tien doc lap.
+- Khong dung chung database voi MVP-03/MVP-04.
+- Khong dung chung cong voi MVP-03/MVP-04.
+- Cac tai lieu cu trong repo chi de tham khao lich su; huong dan chinh cua MVP-05 la file README nay.

@@ -4,7 +4,7 @@
 //   node tests\smoke-test.js admin            (hỏi mật khẩu; chỉ ĐỌC dữ liệu)
 //   node tests\smoke-test.js admin --write    (thêm bước GHI THỬ: tạo hồ sơ kiểm tra, tải tệp,
 //                                              tải về đối chiếu, rồi XÓA hồ sơ đó — cần Admin/Giám đốc)
-// Tùy chọn: --url http://127.0.0.1:3003   (mặc định)
+// Tùy chọn: --url http://127.0.0.1:3004   (mặc định)
 // Kết quả: bảng ĐẠT/LỖI từng mục; mã thoát 0 = tất cả đạt.
 // ============================================================================
 const fs = require('fs');
@@ -15,8 +15,8 @@ const args = process.argv.slice(2);
 const username = args.find(a => !a.startsWith('--'));
 const WRITE = args.includes('--write');
 const urlArg = args.indexOf('--url');
-const BASE = (urlArg >= 0 ? args[urlArg + 1] : 'http://127.0.0.1:3003').replace(/\/$/, '');
-if (!username) { console.log('Cách dùng: node tests/smoke-test.js <tên đăng nhập> [--write] [--url http://127.0.0.1:3003]'); process.exit(2); }
+const BASE = (urlArg >= 0 ? args[urlArg + 1] : 'http://127.0.0.1:3004').replace(/\/$/, '');
+if (!username) { console.log('Cách dùng: node tests/smoke-test.js <tên đăng nhập> [--write] [--url http://127.0.0.1:3004]'); process.exit(2); }
 
 const results = [];
 let token = '';

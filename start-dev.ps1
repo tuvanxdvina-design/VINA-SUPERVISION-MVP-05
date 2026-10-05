@@ -3,8 +3,8 @@ $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backendRoot = Join-Path $projectRoot 'backend'
 $webRoot = Join-Path $projectRoot 'web-public'
 $logRoot = Join-Path $projectRoot 'runtime-logs'
-$backendPort = 3003
-$frontendPort = 8082
+$backendPort = 3004
+$frontendPort = 8083
 $backendBase = "http://127.0.0.1:$backendPort"
 $frontendBase = "http://127.0.0.1:$frontendPort"
 $backendPidFile = Join-Path $logRoot 'backend.pid'
@@ -59,7 +59,7 @@ try {
         foreach ($procId in $owners) {
             $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
             if ($proc -and $proc.ProcessName -eq 'node' -and $procId -eq $knownPid) { Stop-Process -Id $procId -Force }
-            elseif ($proc) { throw "Cong $backendPort dang bi chuong trinh khac chiem: $($proc.ProcessName). Khong tu dong dung tien trinh khong thuoc MVP-04." }
+            elseif ($proc) { throw "Cong $backendPort dang bi chuong trinh khac chiem: $($proc.ProcessName). Khong tu dong dung tien trinh khong thuoc MVP-05." }
         }
         for ($i = 0; $i -lt 10 -and (Get-NetTCPConnection -LocalPort $backendPort -State Listen -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
         $health = $null

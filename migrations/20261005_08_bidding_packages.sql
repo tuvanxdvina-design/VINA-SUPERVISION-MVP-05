@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20261014 — Gói thầu: một công trình có thể có nhiều gói thầu, mỗi gói thầu có
+-- 20261005_08 — Gói thầu: một công trình có thể có nhiều gói thầu, mỗi gói thầu có
 --   nhiều nhà thầu, mỗi nhà thầu thi công một số hạng mục (tên + đơn vị tính).
 --   Tùy chọn: công trình đơn giản (1 gói/1 nhà thầu) vẫn dùng ô "Tên nhà thầu" cũ,
 --   không bắt buộc khai báo Gói thầu. Khi phân công GS viên vào công trình ĐÃ CÓ

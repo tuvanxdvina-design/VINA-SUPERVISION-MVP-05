@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20261013 — TVGS trưởng tự lập nhật ký của chính mình thì "Xác nhận" thẳng, không qua Chờ duyệt
+-- 20261005_06 — TVGS trưởng tự lập nhật ký của chính mình thì "Xác nhận" thẳng, không qua Chờ duyệt
 --   Thêm thao tác CONFIRM (DRAFT -> APPROVED trực tiếp) vào lịch sử duyệt, dùng khi người lập
 --   nhật ký chính là người có quyền Duyệt tại công trình đó (Trưởng TVGS/Giám đốc/Admin tự lập).
 -- ============================================================================

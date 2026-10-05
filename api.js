@@ -1,7 +1,7 @@
 // The mobile HTTPS entry point serves the UI and API from one origin.
-// Port 8082 is the isolated local launcher for MVP-04.
-const API_BASE = window.location.port === '8082'
-  ? `${window.location.protocol}//${window.location.hostname}:3003/api`
+// Port 8083 is the isolated local launcher for MVP-05.
+const API_BASE = window.location.port === '8083'
+  ? `${window.location.protocol}//${window.location.hostname}:3004/api`
   : '/api';
 const AUTH_KEY = 'vina_supervision_auth';
 
