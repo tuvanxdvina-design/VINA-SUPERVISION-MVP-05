@@ -81,8 +81,7 @@ router.post('/bulk', async (req, res) => {
       if (r.error) { failed.push({ id, error: r.error }); continue; }
       await req.audit('daily_logs', id, r.audit, { status: r.before.status }, { status: r.log.status, comment: r.comment }, req.user.userId);
       done.push(r.log);
-    } catch (err) {
-    if (sendEditError(res, err)) return; failed.push({ id, error: err.message }); }
+    } catch (err) { failed.push({ id, error: err.message }); }
   }
   res.json({ done, failed });
 });
@@ -99,8 +98,7 @@ router.use('/:id', async (req, res, next) => {
     const p = await permissionService.forUser(req.user.userId, req.projectId);
     if (['ADMIN', 'DIRECTOR'].includes(p.role)) return next();
     return res.status(404).json({ error: 'Không tìm thấy báo cáo ngày' });
-  } catch (err) {
-    if (sendEditError(res, err)) return; res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /api/daily-logs?project_id=xxx&status=xxx
@@ -111,7 +109,6 @@ router.get('/', access.query, async (req, res) => {
     const logs = await dailyLogService.getDailyLogsByProject(project_id, { status, log_date, userId: req.user.userId, permissions });
     res.json(logs);
   } catch (err) {
-    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -122,7 +119,6 @@ router.get('/:id', async (req, res) => {
     const log = await dailyLogService.getDailyLogById(req.params.id);
     res.json(log || {});
   } catch (err) {
-    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -175,7 +171,6 @@ router.post('/', access.body, permissionService.requirePermission('CREATE'), asy
     if (created) await req.audit('daily_logs', log.id, 'CREATE', null, log, req.user.userId);
     res.status(created ? 201 : 200).json(log);
   } catch (err) {
-    if (sendEditError(res, err)) return;
     if (err.code === '23505') return res.status(409).json({ error: 'Tài khoản này đã có báo cáo ngày trong cùng ngày và ca' });
     res.status(500).json({ error: err.message });
   }
@@ -205,8 +200,7 @@ for (const action of Object.keys(TRANSITIONS)) {
       if (r.error) return res.status(r.status).json({ error: r.error });
       await req.audit('daily_logs', req.params.id, r.audit, { status: r.before.status }, { status: r.log.status, comment: r.comment }, req.user.userId);
       res.json(r.log);
-    } catch (err) {
-    if (sendEditError(res, err)) return; res.status(500).json({ error: err.message }); }
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 }
 
@@ -225,8 +219,7 @@ router.post('/:id/reopen', async (req, res) => {
     const log = await dailyLogService.reopenDailyLog(req.params.id);
     await req.audit('daily_logs', req.params.id, 'REOPEN', { status: current.status }, { status: log.status }, req.user.userId);
     res.json(log);
-  } catch (err) {
-    if (sendEditError(res, err)) return; res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ---- Tài liệu kèm theo nhật ký (PDF/Word/Excel/ảnh…) lưu trong CSDL, tối đa 15 MB/tệp ----
@@ -247,16 +240,14 @@ router.post('/:id/files', express.raw({ type: () => true, limit: MAX_FILE + 1024
     if (req.body.length > MAX_FILE) return res.status(413).json({ error: 'Mỗi tệp tối đa 15 MB' });
     const f = await dailyLogService.addFile(req.params.id, String(req.query.name || 'tai-lieu').slice(0, 255), String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), req.body, req.user.userId);
     res.status(f.created ? 201 : 200).json(f);
-  } catch (err) {
-    if (sendEditError(res, err)) return; res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 router.get('/:id/files/:fileId', async (req, res) => {
   try {
     const f = await dailyLogService.getFile(req.params.id, req.params.fileId);
     if (!f) return res.status(404).json({ error: 'Không tìm thấy tệp' });
     sendStoredFile(res, { name: f.file_name, type: f.file_type, buffer: f.content }, req.query.download);
-  } catch (err) {
-    if (sendEditError(res, err)) return; res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // DELETE /api/daily-logs/:id { reason } — chỉ người có quyền "Xóa" tại công trình (mặc định Admin/Giám đốc).
@@ -272,8 +263,7 @@ router.delete('/:id', async (req, res) => {
     const { recycleId } = await recycleService.archive('daily_logs', req.params.id, reason, req.user.userId);
     await req.audit('daily_logs', req.params.id, 'DELETE', { status: log.status, log_date: log.log_date_text, shift: log.shift }, { recycle_id: recycleId, reason }, req.user.userId);
     res.json({ ok: true, recycle_id: recycleId });
-  } catch (err) {
-    if (sendEditError(res, err)) return; res.status(err.status || 500).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 module.exports = router;

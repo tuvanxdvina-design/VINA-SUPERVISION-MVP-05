@@ -64,3 +64,16 @@ test('OCC đổi trạng thái làm bản sửa cũ hết hiệu lực; migratio
   const after = (await request('GET', path)).body;
   assert.equal(after.row_version, before.row_version);assert.equal(after.status, 'SUBMITTED');
 });
+test('OCC chất lượng: đóng/mở lại dùng đúng phiên bản; không làm mất danh sách người nhận', async () => {
+  const created=await request('POST','/issues',{project_id:projectId,title:'Mở lại OCC',details:{status:'DRAFT',recipients:[{name:'Người nhận MVP05'}]}});
+  assert.equal(created.status,201);const path='/issues/'+created.body.id;
+  const closed=await request('POST',path+'/resolve',{expected_row_version:created.body.row_version});assert.equal(closed.status,200);
+  const stale=await request('POST',path+'/reopen',{expected_row_version:created.body.row_version});
+  assert.equal(stale.status,409);assert.equal(stale.body.code,'EDIT_CONFLICT');
+  assert.equal((await request('GET',path)).body.status,'RESOLVED');
+  const reopened=await request('POST',path+'/reopen',{expected_row_version:closed.body.row_version});
+  assert.equal(reopened.status,200);assert.equal(reopened.body.status,'OPEN');assert.equal(reopened.body.details.status,'DRAFT');
+  assert.equal(reopened.body.details.recipients[0].name,'Người nhận MVP05');
+  const staleClose=await request('POST',path+'/resolve',{expected_row_version:closed.body.row_version});
+  assert.equal(staleClose.status,409);assert.equal(staleClose.body.code,'EDIT_CONFLICT');
+});
