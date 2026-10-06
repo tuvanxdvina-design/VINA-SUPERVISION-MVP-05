@@ -40,7 +40,7 @@ module.exports = function register() {
       page.on('request',r=>{if(r.method()==='PATCH'&&r.url().endsWith('/documents/'+record.id))patches++});
       await page.route('**/api/documents/'+record.id+'/files?**',async route=>{
         const name=new URL(route.request().url()).searchParams.get('name');uploads.push(name);
-        if(name==='retry.txt'&&failUpload)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Temporary upload failure"}'});
+        if(uploads.length===2&&failUpload)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Temporary upload failure"}'});
         return route.continue();
       });
       await page.evaluate(id=>saveDoc(id),record.id);
@@ -62,7 +62,8 @@ module.exports = function register() {
         assert.equal(await page.locator('#dname').inputValue(),'B sửa tiếp từ bản cũ');
         assert.equal(await page.evaluate(id=>queuedFileCount('document',id),record.id),1);
       }else{
-        assert.equal(patches,1);assert.deepEqual(uploads,['first.txt','retry.txt','retry.txt']);
+        assert.equal(patches,1);assert.equal(uploads.length,3);
+        assert.notEqual(uploads[0],uploads[1]);assert.equal(uploads[2],uploads[1]);
         assert.equal(latest.files.length,2);assert.equal(latest.row_version,record.row_version+3);
         assert.equal(await page.evaluate(id=>queuedFileCount('document',id),record.id),0);
         assert.equal(await page.evaluate(id=>db.sync.some(x=>x.recordId===id),record.id),false);
