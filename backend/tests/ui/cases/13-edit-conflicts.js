@@ -133,4 +133,28 @@ module.exports = function register() {
     assert.equal(await page.evaluate(id=>db.sync.find(x=>x.recordId===id)?.status,record.id),'CONFLICT');
     assert.equal((await b.get('/issues/'+record.id)).body.title,'A giữ trên máy chủ');
   });
+  uiTest('GD-OCC lưu lần hai khi request đầu đang chạy không làm mất nội dung lần hai', async page => {
+    await loginViaApi(page,'admin');
+    const api=apiAs(await tokenOf('admin'));
+    const pid=await projectIdByContract(await tokenOf('admin'),'001');
+    const target=targets.find(x=>x.type==='project');
+    const record=await fixture(api,target,pid,'inflight-project');
+    await openFixture(page,target,record);await page.fill('#fname','Lần lưu thứ nhất');
+    let ready,release;const held=new Promise(resolve=>{ready=resolve});const gate=new Promise(resolve=>{release=resolve});
+    let intercepted=false;
+    await page.route('**/api/projects/'+record.id,async route=>{
+      if(route.request().method()!=='PATCH'||intercepted)return route.continue();
+      intercepted=true;const response=await route.fetch();ready();await gate;await route.fulfill({response});
+    });
+    try{
+      await page.evaluate(id=>{window.__firstSave=saveProject(id)},record.id);await held;
+      await page.fill('#fname','Nội dung lần hai cần giữ');
+      await page.evaluate(id=>saveProject(id),record.id);
+    }finally{release()}
+    await page.evaluate(()=>window.__firstSave);
+    await page.waitForFunction(id=>db.sync.some(x=>x.recordId===id&&x.status==='CONFLICT'),record.id);
+    const local=await page.evaluate(id=>db.projects.find(x=>x.id===id),record.id);
+    assert.equal(local.name,'Nội dung lần hai cần giữ');
+    assert.equal((await api.get('/projects/'+record.id)).body.name,'Lần lưu thứ nhất');
+  });
 };

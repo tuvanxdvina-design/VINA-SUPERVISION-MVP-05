@@ -244,6 +244,7 @@ async function syncPendingDocuments(){
   documentSyncRunning=true;
   try{
     for(const item of (db.sync||[]).filter(x=>x.type==='document'&&x.status==='PENDING')){
+      item.sending=true;
       try{
         const result=item.savedResult||await apiRequest('/documents/'+encodeURIComponent(item.recordId),{method:'PATCH',body:JSON.stringify(item.payload)});
         item.savedResult=result;
@@ -257,7 +258,7 @@ async function syncPendingDocuments(){
       }catch(error){
         item.lastError=error.message;item.lastErrorCode=error.code||'';
         if(error.status===409)item.status='CONFLICT';
-      }
+      }finally{delete item.sending}
     }
     db.sync=db.sync.filter(x=>x.status!=='SYNCED');save();
   }finally{documentSyncRunning=false}
@@ -413,6 +414,7 @@ async function syncPendingProjects() {
     if (!pending.length) return;
 
     for (const item of pending) {
+      item.sending=true;
       try {
         const payload = mapLocalProjectToApiData(item.payload || {}, item.recordId);
         if (item.operation === 'CREATE') {
@@ -441,7 +443,7 @@ async function syncPendingProjects() {
         // đánh dấu để người dùng sửa; công trình vẫn được giữ trên thiết bị.
         if (error.status === 409 || error.status === 400) item.status = 'CONFLICT';
         console.warn('VINA-SUPERVISION: Không đồng bộ được công trình', item.recordId, error.message);
-      }
+      } finally { delete item.sending; }
     }
 
     db.sync = db.sync.filter(x => x.status !== 'SYNCED');
@@ -534,6 +536,7 @@ async function syncPendingDailyLogs() {
     );
 
     for (const item of pending) {
+      item.sending=true;
       try {
         const projectId = item.payload?.projectId;
         if (db.sync.some(x => x.type === 'project' && x.status === 'PENDING' && x.recordId === projectId)) {
@@ -625,7 +628,7 @@ async function syncPendingDailyLogs() {
           item.recordId,
           error.message
         );
-      }
+      } finally { delete item.sending; }
     }
 
     db.sync = db.sync.filter(x => x.status !== 'SYNCED');
@@ -685,6 +688,7 @@ async function syncPendingIssues() {
     await syncPendingProjects();
     const pending = (db.sync || []).filter(x => x.type === 'issue' && x.status === 'PENDING');
     for (const item of pending) {
+      item.sending=true;
       try {
         if (db.sync.some(x => x.type === 'project' && x.status === 'PENDING' && x.recordId === item.payload?.projectId)) continue;
         let result;
@@ -724,7 +728,7 @@ async function syncPendingIssues() {
         item.lastErrorCode = error.code || '';
         if (error.status === 409) item.status = 'CONFLICT';
         item.lastAttemptAt = new Date().toISOString();
-      }
+      } finally { delete item.sending; }
     }
     db.sync = db.sync.filter(x => x.status !== 'SYNCED');
     save();

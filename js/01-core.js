@@ -21,7 +21,7 @@ function persistLocal(){
 }
 const save=()=>{persistLocal();renderAll()};
 function queueSync(type,recordId,operation='UPSERT',payload={}){
- const previous=db.sync.find(x=>x.type===type&&x.recordId===recordId&&['PENDING','CONFLICT'].includes(x.status)&&!x.savedResult&&!x.savedRowVersion);
+ const previous=db.sync.find(x=>x.type===type&&x.recordId===recordId&&['PENDING','CONFLICT'].includes(x.status)&&!x.sending&&!x.savedResult&&!x.savedRowVersion);
  if(previous){previous.payload={...payload,expectedRowVersion:previous.payload.expectedRowVersion??payload.expectedRowVersion,expected_row_version:previous.payload.expected_row_version??payload.expected_row_version};previous.lastError='';previous.status='PENDING';return}
  db.sync.push({id:id(),type,recordId,operation,payload,queuedAt:new Date().toISOString(),status:'PENDING'});
 }
