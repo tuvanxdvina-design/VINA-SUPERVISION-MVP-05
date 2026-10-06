@@ -33,7 +33,7 @@ function openReport(docId=''){
  const projects=x?(db.projects||[]).filter(p=>p.id===x.projectId):serverProjects().filter(p=>canCreateDocIn(p.id));
  if(!projects.length)return alert('Tài khoản chưa được cấp quyền "Thêm" tại công trình nào.');
  const cur=document.getElementById('reportProject')?.value;const type=d.reportType||'WEEKLY';
- reportDraft={docId,snapshot:d.snapshot||null,sections:d.sections||{}};
+ reportDraft={docId,snapshot:d.snapshot||null,sections:d.sections||{},rowVersion:x?.rowVersion??null};
  openModal(x?'Sửa '+(REPORT_TYPES[type]||'báo cáo')+' '+x.code:'Lập báo cáo',
   (x?reviewBlockHtml(x,{history:false}):'')+'<div class="row"><div><label>Công trình</label><select id="rpProject"'+(x?' disabled':'')+'>'+projects.map(p=>'<option value="'+p.id+'"'+((x?.projectId||cur)===p.id?' selected':'')+'>'+esc(p.code)+' - '+esc(p.name)+'</option>').join('')+'</select></div>'
   +'<div><label>Loại báo cáo</label><select id="rpType"'+(x?' disabled':'')+' onchange="document.getElementById(\'rpPeriod\').innerHTML=periodInputsHtml(this.value,{});reportDraft.snapshot=null;renderReportEditor()">'+Object.entries(REPORT_TYPES).map(([k,t])=>'<option value="'+k+'"'+(k===type?' selected':'')+'>'+t+'</option>').join('')+'</select></div>'
@@ -73,25 +73,27 @@ async function saveReport(submit){
  const pid=document.getElementById('rpProject').value;const type=s.type;
  const name=REPORT_TYPES[type]+' '+reportPeriodLabel(type,s.period.from,s.period.to);
  const files=[...(document.getElementById('rpFiles')?.files||[])];if(files.some(f=>f.size>MAX_DOC_FILE)){msg.textContent='Có tệp vượt 15 MB.';return}
- const body={project_id:pid,doc_group:'REPORT',type:'BC',name,details:{reportType:type,from:s.period.from,to:s.period.to,snapshot:s,sections:reportDraft.sections}};
+ const body={expected_row_version:reportDraft.rowVersion,project_id:pid,doc_group:'REPORT',type:'BC',name,details:{reportType:type,from:s.period.from,to:s.period.to,snapshot:s,sections:reportDraft.sections}};
  const btn=document.getElementById('rpSave');if(btn)btn.disabled=true;
  try{
+  let doc=reportDraft.docId?await apiRequest('/documents/'+encodeURIComponent(reportDraft.docId),{method:'PATCH',body:JSON.stringify(body)}):await apiRequest('/documents',{method:'POST',body:JSON.stringify(body)});
+  reportDraft.docId=doc.id;reportDraft.rowVersion=doc.row_version;
   // Nhập/điều chỉnh % thực tế trong báo cáo → ghi vào bảng tiến độ tại ngày so sánh, rồi tổng hợp lại số liệu
   const manual=collectReportActuals();
   if(manual&&manual.length){
    msg.textContent='Đang cập nhật tiến độ thực tế ('+manual.length+' hạng mục)...';
    await apiRequest('/projects/'+encodeURIComponent(pid)+'/progress-plans/'+encodeURIComponent(s.progress.plan_id)+'/actuals',{method:'POST',body:JSON.stringify({report_date:s.progress.as_of,rows:manual})});
    const snap=await apiRequest('/reports/compile?project_id='+encodeURIComponent(pid)+'&type='+s.type+'&from='+encodeURIComponent(s.period.from)+(s.type==='FINAL'?'&to='+encodeURIComponent(s.period.to):''));
-   reportDraft.snapshot=snap;body.details.snapshot=snap;
+   reportDraft.snapshot=snap;body.details.snapshot=snap;body.expected_row_version=reportDraft.rowVersion;
+   doc=await apiRequest('/documents/'+encodeURIComponent(doc.id),{method:'PATCH',body:JSON.stringify(body)});reportDraft.rowVersion=doc.row_version;
   }
   msg.textContent='Đang lưu...';
-  let doc=reportDraft.docId?await apiRequest('/documents/'+encodeURIComponent(reportDraft.docId),{method:'PATCH',body:JSON.stringify(body)}):await apiRequest('/documents',{method:'POST',body:JSON.stringify(body)});
   for(const f of files){msg.textContent='Đang tải tệp '+f.name;await uploadDocFile(doc.id,f,'Tài liệu kèm báo cáo')}
   if(submit)doc=await apiRequest('/documents/'+encodeURIComponent(doc.id)+'/submit',{method:'POST',body:'{}'});
   doc=await apiRequest('/documents/'+encodeURIComponent(doc.id));
   upsertLocalDoc(mapDocumentFromApi(doc));audit(reportDraft.docId?'UPDATE':'CREATE','report',doc.id,doc.auto_code+' — '+name);save();
   closeModal();reportDraft=null;renderReports();
- }catch(error){msg.textContent='Không lưu được: '+error.message;if(btn)btn.disabled=false}
+ }catch(error){if(error.status===409&&reportDraft.docId){queueSync('document',reportDraft.docId,'UPDATE',body);const pending=db.sync.find(x=>x.type==='document'&&x.recordId===reportDraft.docId);pending.status='CONFLICT';pending.lastError=error.message;pending.lastErrorCode=error.code;save();}msg.textContent='Không lưu được: '+error.message+' Nội dung đang nhập vẫn được giữ.';if(btn)btn.disabled=false}
 }
 function reportBodyHtml(s,{sections,code,title}={}){
  const P=s.project||{},st=s.stats||{},pr=s.progress,iss=s.issues||{opened:[],closed:[],open_total:0};

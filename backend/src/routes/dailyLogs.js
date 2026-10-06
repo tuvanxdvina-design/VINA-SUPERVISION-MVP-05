@@ -1,3 +1,4 @@
+const { sendEditError } = require('../utils/editConflict');
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
@@ -186,6 +187,7 @@ router.patch('/:id', async (req, res) => {
     await req.audit('daily_logs', req.params.id, log.status === 'LOCKED' ? 'UPDATE_LOCKED' : 'UPDATE', null, log, req.user.userId);
     res.json(log);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     if (err.code === '23505') return res.status(409).json({ error: 'Tài khoản này đã có báo cáo ngày trong cùng ngày và ca' });
     res.status(500).json({ error: err.message });
   }

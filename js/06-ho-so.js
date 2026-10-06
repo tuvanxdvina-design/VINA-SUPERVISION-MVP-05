@@ -29,7 +29,7 @@ function viewDoc(docId){
 function upsertLocalDoc(doc){db.docs=db.docs||[];const i=db.docs.findIndex(x=>x.id===doc.id);if(i>=0)db.docs[i]=doc;else db.docs.unshift(doc)}
 function openDoc(docId='',forceProjectId=''){
  if(!apiOnline())return alert('Cần kết nối mạng để tạo/sửa hồ sơ (tệp được lưu trên máy chủ để mọi tài khoản cùng xem).');
- const x=db.docs.find(v=>v.id===docId)||{};const edit=!!docId;
+ const x=db.docs.find(v=>v.id===docId)||{};const edit=!!docId;captureEditVersion('document',docId,x);
  if(edit&&!canModifyDoc(x))return alert('Bạn không có quyền sửa hồ sơ này.');
  const projects=edit?(db.projects||[]).filter(p=>p.id===x.projectId):serverProjects().filter(p=>canCreateDocIn(p.id));
  if(!projects.length)return alert('Tài khoản chưa được cấp quyền "Thêm" hồ sơ ở công trình nào.');
@@ -53,6 +53,7 @@ function openDoc(docId='',forceProjectId=''){
 }
 async function saveDoc(docId=''){
  const msg=document.getElementById('docMessage');const btn=document.getElementById('docSaveBtn');const say=t=>{if(msg)msg.textContent=t};
+ if(btn?.disabled)return;
  const group=document.getElementById('dgroup').value;const report=group==='REPORT';
  const name=document.getElementById('dname').value.trim();if(!name)return say('Nhập tên hồ sơ.');
  const personnelRows=[...document.querySelectorAll('#personnelChangesList .personnel-change-row')];
@@ -64,17 +65,44 @@ async function saveDoc(docId=''){
  const files=[...decisionFiles];slots.forEach(i=>[...(i.files||[])].forEach(f=>files.push({file:f,category:i.dataset.category})));
  const big=files.find(f=>f.file.size>MAX_DOC_FILE);if(big)return say('Tệp "'+big.file.name+'" vượt 15 MB.');
  if(btn)btn.disabled=true;
+ const body={project_id:document.getElementById('dproj').value,doc_group:group,type:document.getElementById('dtype').value,name,details,expected_row_version:editVersion('document',docId)};
  try{
   say('Đang lưu thông tin hồ sơ...');
-  const body={project_id:document.getElementById('dproj').value,doc_group:group,type:document.getElementById('dtype').value,name,details};
-  let doc=docId?await apiRequest('/documents/'+encodeURIComponent(docId),{method:'PATCH',body:JSON.stringify(body)}):await apiRequest('/documents',{method:'POST',body:JSON.stringify(body)});
-  const errors=[];
-  for(const [n,f] of files.entries()){say('Đang tải tệp '+(n+1)+'/'+files.length+': '+f.file.name);try{await uploadDocFile(doc.id,f.file,f.category)}catch(error){errors.push(f.file.name+': '+error.message)}}
-  doc=await apiRequest('/documents/'+encodeURIComponent(doc.id));
-  upsertLocalDoc(mapDocumentFromApi(doc));audit(docId?'UPDATE':'CREATE','docs',doc.id,doc.auto_code+' — '+doc.name);save();renderDocs();
-  if(errors.length){say('Đã lưu hồ sơ '+doc.auto_code+' nhưng '+errors.length+' tệp lỗi:\n'+errors.join('\n'));if(btn)btn.disabled=false;return}
+  let pending=btn?.documentSaveItem||(db.sync||[]).find(x=>x.type==='document'&&x.recordId===docId&&['PENDING','CONFLICT'].includes(x.status));
+  if(pending?.sending){say('Hồ sơ đang đồng bộ. Nội dung đang nhập vẫn được giữ.');return}
+  if(!pending){
+   const created=docId?null:await apiRequest('/documents',{method:'POST',body:JSON.stringify(body)});
+   pending={id:id(),type:'document',recordId:docId||created.id,operation:'UPDATE',payload:body,queuedAt:new Date().toISOString(),status:'PENDING'};
+   if(created){pending.savedResult=created;upsertLocalDoc(mapDocumentFromApi(created));}
+  }else{
+   const metadata=value=>JSON.stringify({...value,expected_row_version:null});
+   if(pending.savedResult&&metadata(pending.payload)!==metadata(body)){
+    body.expected_row_version=pending.savedResult.row_version;
+    delete pending.savedResult;
+   }else body.expected_row_version=pending.payload.expected_row_version;
+   pending.payload=body;
+  }
+  // Keep the acknowledged metadata and remaining files across retry/reload.
+  if(btn)btn.documentSaveItem=pending;
+  pending.status='PENDING';
+  if(!db.sync.includes(pending))db.sync.push(pending);
+  const local=db.docs.find(x=>x.id===pending.recordId);if(local){local.name=name;local.details=details;}
+  save();
+  if(files.length){
+   await queueOfflineFiles('document',pending.recordId,files.map(x=>({file:x.file,category:x.category,kind:'DOCUMENT'})));
+   document.querySelectorAll('#mbody input[type=file]').forEach(input=>{input.value=''});
+  }
+  await syncPendingDocuments();
+  if(pending.savedResult)captureEditVersion('document',pending.recordId,{rowVersion:pending.savedResult.row_version});
+  if(pending.status!=='SYNCED'){
+   say('Không lưu được: '+(pending.lastError||'Hồ sơ đang chờ đồng bộ.')+' Nội dung đang nhập và tệp chờ vẫn được giữ.');return;
+  }
+  const doc=pending.savedResult;
+  audit(docId?'UPDATE':'CREATE','docs',doc.id,(doc.auto_code||'')+' — '+name);save();renderDocs();
   closeModal();if(currentProjectId)renderProjectDetail();
- }catch(error){say('Không lưu được: '+error.message);if(btn)btn.disabled=false}
+ }catch(error){
+  say('Không lưu được: '+error.message+' Nội dung đang nhập vẫn được giữ.');
+ }finally{if(btn)btn.disabled=false}
 }
 async function syncLegacyLocalDocs(){
  const queue=(db.sync||[]).filter(x=>x.type==='docs'&&x.status==='PENDING');

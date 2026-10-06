@@ -1,3 +1,4 @@
+const { expectedVersion, requireUpdated } = require('../utils/editConflict');
 const pool = require('../utils/db');
 const crypto = require('crypto');
 const { lastReviewSql } = require('./reviewService');
@@ -6,7 +7,7 @@ const { lastReviewSql } = require('./reviewService');
 const TYPE_CODES = { HS: 'Hồ sơ pháp lý', BB: 'Biên bản', NK: 'Nhật ký', TK: 'Thiết kế kỹ thuật', BC: 'Báo cáo', TKT: 'Tiêu chuẩn kỹ thuật', KHAC: 'Khác' };
 
 const LIST_SQL = `
-  SELECT d.id, d.project_id, d.type, d.auto_code, d.name, d.status, d.version, d.doc_group, d.details,
+  SELECT d.id, d.project_id, d.type, d.auto_code, d.name, d.status, d.version, d.row_version, d.doc_group, d.details,
          d.is_adjustment_of, d.created_by, d.created_at, d.updated_at, d.approved_at, d.locked_at, d.submitted_at,
          ${lastReviewSql('documents', 'd')} AS last_review,
          COALESCE(d.author_name, u.full_name) AS created_by_name, up.full_name AS updated_by_name, a.full_name AS approved_by_name,
@@ -73,13 +74,13 @@ class DocumentService {
     const cur = await this.getDocumentById(id);
     if (!cur) return null;
     const type = data.type && TYPE_CODES[data.type] ? data.type : cur.type;
-    await pool.query(`
+    const result = await pool.query(`
       UPDATE documents SET name = COALESCE(NULLIF($1, ''), name), doc_group = $2, details = $3::jsonb,
-        updated_by = $4, updated_at = NOW()
-      WHERE id = $5`,
+        updated_by = $4, updated_at = NOW(), type = $6
+      WHERE id = $5 AND row_version = $7 RETURNING id`,
     [data.name || '', data.doc_group === 'REPORT' || data.doc_group === 'LEGAL' ? data.doc_group : cur.doc_group,
-      JSON.stringify(data.details !== undefined ? data.details : cur.details || {}), actorId, id]);
-    if (type !== cur.type) await pool.query('UPDATE documents SET type = $1 WHERE id = $2', [type, id]);
+      JSON.stringify(data.details !== undefined ? data.details : cur.details || {}), actorId, id, type, expectedVersion(data)]);
+    requireUpdated(result.rows[0]);
     return this.getDocumentById(id);
   }
 

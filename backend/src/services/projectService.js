@@ -1,3 +1,4 @@
+const { expectedVersion, requireUpdated } = require('../utils/editConflict');
 const pool = require('../utils/db');
 const { randomUUID } = require('crypto');
 const fileStore = require('./fileStore');
@@ -126,10 +127,10 @@ class ProjectService {
         contractor_start_date = $24, contractor_end_date = $25, contractor_duration_days = $26,
         location = $4, description = $12,
         updated_at = NOW()
-      WHERE id = $27
+      WHERE id = $27 AND row_version = $28
       RETURNING *
-    `, [...values, id]);
-    return result.rows[0];
+    `, [...values, id, expectedVersion(data)]);
+    return requireUpdated(result.rows[0]);
   }
 
   async addFile(projectId, category, name, type, buffer, userId) {

@@ -1,5 +1,9 @@
 # Kết quả kiểm thử — bản 2026-09-26.5
 
+## Bổ sung MVP-05 ngày 06/10/2026 — thử lại hồ sơ sau lỗi mạng
+
+Build `2026-10-06.2-mvp05`: kiểm tra cú pháp frontend và build khớp đạt. Thêm 3 ca UI: thử lại upload không lặp PATCH/tệp; GET lỗi sau PATCH rồi tải lại trang vẫn giữ checkpoint; sửa tiếp nội dung sau upload lỗi vẫn bị chặn nếu người khác đã cập nhật. Bộ UI hiện có 43 ca. Kết quả cuối phải đọc GitHub Actions của đúng commit trên PR #1; không suy ra từ lượt chạy cũ. Lượt đầu phát hiện giả định thứ tự tệp trong kiểm thử không đúng với IndexedDB, đã sửa ca thử để làm lỗi lượt upload thứ hai bất kể thứ tự. Chưa nghiệm thu thiết bị thật hoặc tác động DB vận hành.
+
 Môi trường thử: khôi phục bản sao lưu thật `vina-supervision-2026-09-25-1053-truoc-20260926.dump` của máy chủ, chạy toàn bộ migration bằng tài khoản `postgres` (đúng như `migrate-db.ps1`), backend chạy bằng tài khoản **không phải superuser** (giống `vina_user` trên máy chủ), trình duyệt Chromium tự động.
 
 ## 1. Nguyên nhân "HS-2026-0007 Chưa lên máy chủ" — đã tái hiện

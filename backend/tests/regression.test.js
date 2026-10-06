@@ -25,6 +25,10 @@ const ROOT = db.ROOT;
 let server; const tokens = {}; let P = {};
 async function api(method, p, body, who = 'admin', headers = {}) {
   const isBuf = Buffer.isBuffer(body);
+  if (((method === 'PATCH' && /^\/(projects|daily-logs|documents|issues)\/[^/]+$/.test(p)) || (method === 'POST' && /^\/issues\/[^/]+\/(resolve|reopen)$/.test(p))) && body?.expected_row_version === undefined) {
+    const snapshot = await api('GET', p.replace(/\/(resolve|reopen)$/, ''), null, who);
+    if (snapshot.status === 200) body = { ...body, expected_row_version: snapshot.body.row_version };
+  }
   const res = await fetch(BASE + '/api' + p, { method, headers: { ...(body && !isBuf ? { 'Content-Type': 'application/json' } : {}), ...(tokens[who] ? { Authorization: 'Bearer ' + tokens[who] } : {}), ...headers }, body: body ? (isBuf ? body : JSON.stringify(body)) : undefined });
   const t = res.headers.get('content-type') || '';
   return { status: res.status, body: t.includes('json') ? await res.json() : Buffer.from(await res.arrayBuffer()) };

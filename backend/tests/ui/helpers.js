@@ -147,6 +147,10 @@ async function navVisible(page, dataPage) {
 function apiAs(token) {
   const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
   const call = async (method, p, body) => {
+    if (((method === 'PATCH' && /^\/(projects|daily-logs|documents|issues)\/[^/]+$/.test(p)) || (method === 'POST' && /^\/issues\/[^/]+\/(resolve|reopen)$/.test(p))) && body?.expected_row_version === undefined) {
+      const snapshot = await call('GET', p.replace(/\/(resolve|reopen)$/, ''));
+      if (snapshot.status === 200) body = { ...body, expected_row_version: snapshot.body.row_version };
+    }
     const res = await fetch(BASE + '/api' + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
     const ct = res.headers.get('content-type') || '';
     return { status: res.status, body: ct.includes('json') ? await res.json() : null };

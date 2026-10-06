@@ -20,7 +20,11 @@ function persistLocal(){
   }
 }
 const save=()=>{persistLocal();renderAll()};
-function queueSync(type,recordId,operation='UPSERT',payload={}){db.sync.push({id:id(),type,recordId,operation,payload,queuedAt:new Date().toISOString(),status:'PENDING'})}
+function queueSync(type,recordId,operation='UPSERT',payload={}){
+ const previous=db.sync.find(x=>x.type===type&&x.recordId===recordId&&['PENDING','CONFLICT'].includes(x.status)&&!x.sending&&!x.savedResult&&!x.savedRowVersion);
+ if(previous){previous.payload={...payload,expectedRowVersion:previous.payload.expectedRowVersion??payload.expectedRowVersion,expected_row_version:previous.payload.expected_row_version??payload.expected_row_version};previous.lastError='';previous.status='PENDING';return}
+ db.sync.push({id:id(),type,recordId,operation,payload,queuedAt:new Date().toISOString(),status:'PENDING'});
+}
 const id=()=>crypto.randomUUID ? crypto.randomUUID() :
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
     const r=crypto.getRandomValues(new Uint8Array(1))[0]&15;
@@ -81,18 +85,19 @@ async function showLogFiles(logId){
 }
 async function logAction(logId,action,silent){
  const l=db.logs.find(v=>v.id===logId);if(!l?.serverId)return alert('Báo cáo ngày chưa lên máy chủ.');
+ if((action==='submit'||action==='confirm')&&(db.sync||[]).some(x=>x.type==='daily_log'&&x.recordId===l.id&&['PENDING','CONFLICT'].includes(x.status)))return alert('Báo cáo ngày còn nội dung chưa đồng bộ hoặc xung đột. Hãy đồng bộ và đối chiếu trước khi gửi duyệt.');
  if((action==='submit'||action==='confirm')&&typeof queuedFileCount==='function'&&await queuedFileCount('daily_log',l.id))return alert('Báo cáo ngày còn ảnh hoặc tài liệu chưa đồng bộ. Hãy kết nối mạng và chờ tải xong trước khi gửi duyệt.');
  if((action==='approve'||action==='reject')&&!silent)return openReviewDecision('daily_logs',l.serverId,action);
  const ask={submit:'Gửi báo cáo ngày này cho Trưởng TVGS duyệt? Sau khi gửi sẽ không sửa được (trừ khi bị trả lại).',confirm:'Xác nhận báo cáo ngày này? Bạn là người có quyền Duyệt tại công trình này nên báo cáo sẽ chuyển thẳng sang Đã duyệt, không qua bước Chờ duyệt.',reject:'Trả lại báo cáo ngày cho người lập sửa?',lock:'Khóa báo cáo ngày? Báo cáo đã khóa là hồ sơ chính thức.'}[action];
  if(ask&&!silent&&!confirm(ask))return;
- try{const r=await apiRequest('/daily-logs/'+encodeURIComponent(l.serverId)+'/'+action,{method:'POST'});l.status=r.status;l.version=Number(r.version||l.version||1);l.canEdit=false;audit(action.toUpperCase(),'daily_log',l.serverId,l.date+' '+shiftLabel(l.shift));save()}
+ try{const r=await apiRequest('/daily-logs/'+encodeURIComponent(l.serverId)+'/'+action,{method:'POST'});l.status=r.status;l.version=Number(r.version||l.version||1);l.rowVersion=Number(r.row_version||l.rowVersion);l.canEdit=false;audit(action.toUpperCase(),'daily_log',l.serverId,l.date+' '+shiftLabel(l.shift));save()}
  catch(error){alert('Không thực hiện được: '+error.message)}
 }
 // Mở lại báo cáo ngày đã gửi/duyệt/khóa về Nháp để người lập sửa và gửi duyệt lại.
 async function reopenLog(logId){
  const l=db.logs.find(v=>v.id===logId);if(!l?.serverId)return alert('Báo cáo ngày chưa lên máy chủ.');
  if(!confirm('Mở lại báo cáo ngày này về Nháp để sửa? Báo cáo sẽ cần gửi duyệt lại từ đầu.'))return;
- try{const r=await apiRequest('/daily-logs/'+encodeURIComponent(l.serverId)+'/reopen',{method:'POST'});l.status=r.status;l.version=Number(r.version||l.version||1);l.canEdit=true;audit('REOPEN','daily_log',l.serverId,l.date+' '+shiftLabel(l.shift));save()}
+ try{const r=await apiRequest('/daily-logs/'+encodeURIComponent(l.serverId)+'/reopen',{method:'POST'});l.status=r.status;l.version=Number(r.version||l.version||1);l.rowVersion=Number(r.row_version||l.rowVersion);l.canEdit=true;audit('REOPEN','daily_log',l.serverId,l.date+' '+shiftLabel(l.shift));save()}
  catch(error){alert('Không mở lại được: '+error.message)}
 }
 // TVGS trưởng: một nút "Duyệt tất cả" = Xác nhận nháp của chính mình + Duyệt bản thành viên đã gửi.
@@ -229,10 +234,12 @@ async function renderIssueFilesBox(boxId,issueId){
 async function syncDocumentsFromApi(){
  if(!apiOnline()||typeof apiGetDocuments!=='function')return;
  await syncLegacyLocalDocs();
+ await syncPendingDocuments();
  const fetched=[];let failed=false;
  for(const project of serverProjects()){try{fetched.push(...await apiGetDocuments(project.id))}catch(error){failed=true;console.warn('Không tải được hồ sơ công trình:',project.id,error.message)}}
- const leftover=(db.docs||[]).filter(x=>x.pendingUpload);
- if(!failed||fetched.length)db.docs=[...fetched,...leftover];
+ const pending=new Set((db.sync||[]).filter(x=>x.type==='document'&&['PENDING','CONFLICT'].includes(x.status)).map(x=>x.recordId));
+ const leftover=(db.docs||[]).filter(x=>x.pendingUpload||pending.has(x.id));
+ if(!failed||fetched.length)db.docs=[...fetched.filter(x=>!pending.has(x.id)),...leftover];
  save();
 }
 const LEGACY_TYPE={'HỒ SƠ PHÁP LÝ':'HS','BIÊN BẢN':'BB','NHẬT KÝ':'NK','THIẾT KẾ THUẬT':'TK','BÁO CÁO':'BC'};
@@ -272,7 +279,41 @@ save();
 }
 function exportJSON(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vina-supervision-backup.json';a.click()}
 function clearAll(){if(confirm('Xóa toàn bộ dữ liệu cục bộ?')){localStorage.removeItem(KEY);location.reload()}}
-function updateNet(){let el=document.getElementById('net');el.textContent=navigator.onLine?'● ONLINE':'● OFFLINE';el.style.background=navigator.onLine?'#027a48':'#b54708'}
+function updateNet(){let el=document.getElementById('net');const conflicts=(db.sync||[]).filter(x=>x.status==='CONFLICT');el.textContent=(navigator.onLine?'● ONLINE':'● OFFLINE')+(conflicts.length?' · '+conflicts.length+' bản xung đột':'');el.style.background=conflicts.length?'#b42318':(navigator.onLine?'#027a48':'#b54708');el.onclick=conflicts.length?showConflictDrafts:null}
+
+let activeEditVersion=null;
+function captureEditVersion(type,recordId,record){activeEditVersion={type,recordId,version:record?.rowVersion??null}}
+function editVersion(type,recordId,record){return activeEditVersion?.type===type&&activeEditVersion.recordId===recordId?activeEditVersion.version:record?.rowVersion??null}
+function showQueuedConflict(type,recordId){
+ const item=(db.sync||[]).find(x=>x.type===type&&x.recordId===recordId&&x.status==='CONFLICT');
+ if(!item)return false;
+ alert(item.lastError||'Nội dung đã được người khác cập nhật. Bản nhập được giữ trên thiết bị để đối chiếu.');
+ updateNet();return true;
+}
+function exportConflictDraft(queueId){
+ const item=(db.sync||[]).find(x=>x.id===queueId);if(!item)return;
+ const blob=new Blob([JSON.stringify({type:item.type,recordId:item.recordId,payload:item.payload,error:item.lastError},null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='vina-ban-nhap-'+item.recordId+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function showConflictDrafts(){
+ const items=(db.sync||[]).filter(x=>x.status==='CONFLICT');
+ openModal('Bản nhập cần đối chiếu','<p>Bản máy chủ chưa bị ghi đè. Xuất bản nháp trước khi tải dữ liệu mới; sau đó mở lại bản mới và nhập phần cần giữ.</p>'+items.map(x=>'<div class="card"><b>'+esc(({project:'Công trình',daily_log:'Báo cáo ngày',issue:'Chất lượng',document:'Hồ sơ / báo cáo'})[x.type]||x.type)+'</b><p>'+esc(x.lastError||'Xung đột')+'</p><button onclick="exportConflictDraft(\''+x.id+'\')">Xuất bản nháp</button> <button onclick="discardConflictDraft(\''+x.id+'\')">Bỏ bản nháp, tải bản mới</button></div>').join(''));
+}
+async function discardConflictDraft(queueId){
+ if(!apiOnline())return alert('Cần kết nối mạng để tải bản mới.');
+ if(!confirm('Bạn đã xuất hoặc sao chép nội dung cần giữ? Bỏ bản nháp chỉ trên thiết bị này và tải lại bản máy chủ.'))return;
+ const item=db.sync.find(x=>x.id===queueId);if(!item)return;
+ // Fetch before discarding: a failed request must preserve the draft.
+ try{
+  const paths={project:'projects',daily_log:'daily-logs',issue:'issues',document:'documents'};
+  const raw=await apiRequest('/'+paths[item.type]+'/'+encodeURIComponent(item.recordId));
+  const collection={project:'projects',daily_log:'logs',issue:'issues',document:'docs'}[item.type];
+  const mapper={project:mapProjectFromApi,daily_log:mapDailyLogFromApi,issue:mapIssueFromApi,document:mapDocumentFromApi}[item.type];
+  const index=db[collection].findIndex(x=>x.id===item.recordId||x.serverId===item.recordId);
+  if(index>=0)db[collection][index]={...mapper(raw),id:db[collection][index].id,serverId:raw.id};
+  db.sync=db.sync.filter(x=>x.id!==queueId);save();closeModal();
+ }catch(error){alert('Chưa tải được bản mới; bản nháp vẫn được giữ. '+error.message)}
+}
 function renderHeaderUser(){const el=document.getElementById('hdrUser');if(!el)return;const u=typeof getAuthUser==='function'?getAuthUser():null;if(!u){el.textContent='';return}const roleLabel=(typeof ROLE_LABELS!=='undefined'&&ROLE_LABELS[u.role_name])||db.role||u.role_name||'';el.textContent=(u.full_name||u.username||'')+(roleLabel?' · '+roleLabel:'')}
 
 async function showLogPhotos(logId){

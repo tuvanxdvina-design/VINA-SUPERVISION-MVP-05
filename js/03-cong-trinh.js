@@ -1,7 +1,7 @@
 let currentProjectId=null;
 function mergeProjectsFromServer(remoteProjects){
   const localQueue=db.sync.filter(x=>x.type==='project' && (x.status==='PENDING'||x.status==='CONFLICT'));
-  const pendingIds=new Set(localQueue.filter(x=>x.status==='PENDING').map(x=>x.recordId));
+  const pendingIds=new Set(localQueue.map(x=>x.recordId));
   const queuedIds=new Set(localQueue.map(x=>x.recordId));
   const localById=new Map(db.projects.map(p=>[p.id,p]));
   const remoteById=new Map();remoteProjects.forEach(p=>{if(p&&p.id&&!remoteById.has(p.id))remoteById.set(p.id,p)});
@@ -90,7 +90,7 @@ function durationFromDates(start,end){if(!start||!end)return null;const days=Mat
 function syncContractDuration(prefix,source){const start=document.getElementById(prefix+'StartDate');const end=document.getElementById(prefix+'EndDate');const days=document.getElementById(prefix+'ExecutionDays');if(!start||!end||!days)return;if(source==='days'){const value=Number(days.value);if(start.value&&Number.isInteger(value)&&value>0)end.value=dateFromDuration(start.value,value);return}days.value=durationFromDates(start.value,end.value)||''}
 function openProject(pid=''){
 if(pid?!canEditProject(pid):!canManageAssignments()){alert(pid?'Tài khoản chỉ được xem công trình được phân công.':'Chỉ Admin/Giám đốc được tạo công trình mới.');return;}
-let p=db.projects.find(x=>x.id===pid)||{};
+let p=db.projects.find(x=>x.id===pid)||{};captureEditVersion('project',pid,p);
 const tvgsCurrent=(p.files||[]).filter(x=>x.category==='TVGS_CONTRACT').slice(-1)[0];const contractorCurrent=(p.files||[]).filter(x=>x.category==='CONTRACTOR_CONTRACT').slice(-1)[0];
 const tvgsFile=tvgsCurrent?'<p class="muted">Tệp hiện tại: '+esc(tvgsCurrent.name)+'</p>':'';
 const contractorFile=contractorCurrent?'<p class="muted">Tệp hiện tại: '+esc(contractorCurrent.name)+'</p>':'';
@@ -139,14 +139,14 @@ const tvgsFile=document.getElementById('fcontractFile')?.files?.[0]||null;const 
 if([tvgsFile,contractorFile].some(f=>f&&f.size>25*1024*1024))return alert('Mỗi tệp hợp đồng tối đa 25 MB.');
 const baselineFileInput=document.getElementById('fbaselineProgressFile')?.files?.[0];
 if(baselineFileInput&&baselineFileInput.size>10*1024*1024)return alert('Bảng tiến độ tối đa 10 MB.');
-let data={code:fcode.value.trim(),name:fname.value.trim(),province:fprovince.value.trim(),client:fclient.value.trim(),contractorName:fcontractor.value.trim(),progress:+fprogress.value,plannedProgress:fplannedProgress.value===''?null:+fplannedProgress.value,address:faddress.value.trim(),status:fstatus.value,contractNo:fcontractNo.value.trim(),contractDate:fcontractDate.value||'',startDate:fStartDate.value||'',endDate:fEndDate.value||'',contractValue:parseVnNumber(fcontractValue.value),contractContent:fcontractContent.value.trim(),consultantContractType:fconsultantContractType.value,consultantPriceType:fconsultantPriceType.value||null,contractDurationDays:fExecutionDays.value?+fExecutionDays.value:null,contractorContractNo:fcontractorContractNo.value.trim(),contractorContractDate:fcontractorContractDate.value||'',contractorContractValue:parseVnNumber(fcontractorContractValue.value),contractorContractContent:fcontractorContractContent.value.trim(),contractorContractType:fcontractorContractType.value,contractorPriceType:fcontractorPriceType.value||null,contractorStartDate:fcontractorStartDate.value||'',contractorEndDate:fcontractorEndDate.value||'',contractorDurationDays:fcontractorExecutionDays.value?+fcontractorExecutionDays.value:null};
+let data={expectedRowVersion:editVersion('project',pid,p),code:fcode.value.trim(),name:fname.value.trim(),province:fprovince.value.trim(),client:fclient.value.trim(),contractorName:fcontractor.value.trim(),progress:+fprogress.value,plannedProgress:fplannedProgress.value===''?null:+fplannedProgress.value,address:faddress.value.trim(),status:fstatus.value,contractNo:fcontractNo.value.trim(),contractDate:fcontractDate.value||'',startDate:fStartDate.value||'',endDate:fEndDate.value||'',contractValue:parseVnNumber(fcontractValue.value),contractContent:fcontractContent.value.trim(),consultantContractType:fconsultantContractType.value,consultantPriceType:fconsultantPriceType.value||null,contractDurationDays:fExecutionDays.value?+fExecutionDays.value:null,contractorContractNo:fcontractorContractNo.value.trim(),contractorContractDate:fcontractorContractDate.value||'',contractorContractValue:parseVnNumber(fcontractorContractValue.value),contractorContractContent:fcontractorContractContent.value.trim(),contractorContractType:fcontractorContractType.value,contractorPriceType:fcontractorPriceType.value||null,contractorStartDate:fcontractorStartDate.value||'',contractorEndDate:fcontractorEndDate.value||'',contractorDurationDays:fcontractorExecutionDays.value?+fcontractorExecutionDays.value:null};
 if(!data.name)return alert('Nhập tên công trình');
 if(data.startDate&&data.endDate&&!durationFromDates(data.startDate,data.endDate))return alert('Ngày kết thúc TVGS phải từ ngày bắt đầu trở đi.');
 if(data.contractorStartDate&&data.contractorEndDate&&!durationFromDates(data.contractorStartDate,data.contractorEndDate))return alert('Ngày kết thúc hoạt động nhà thầu phải từ ngày bắt đầu trở đi.');
 if(p){Object.assign(p,data);p.updatedAt=new Date().toISOString()}else{p={id:id(),...data,createdAt:new Date().toISOString()};db.projects.push(p)}
 const entries=[];if(tvgsFile)entries.push({file:tvgsFile,kind:'PROJECT_FILE',category:'TVGS_CONTRACT'});if(contractorFile)entries.push({file:contractorFile,kind:'PROJECT_FILE',category:'CONTRACTOR_CONTRACT'});if(baselineFileInput)entries.push({file:baselineFileInput,kind:'PROGRESS_BASELINE',category:'PROGRESS_BASELINE'});const queued=entries.length?await queueOfflineFiles('project',p.id,entries):[];
 if(baselineFileInput){db.pendingInitialProgressPlans[p.id]={plan_name:'Bảng tiến độ cơ sở Nhà thầu',report_date:new Date().toISOString().slice(0,10),planned_percent:Number(data.plannedProgress??0),actual_percent:Number(data.progress||0),original_end_date:data.endDate||null,is_extension:false,is_current:true,attachment_queue_id:queued[queued.length-1]}}
-audit(pid?'UPDATE':'CREATE','project',p.id,data.name+(data.contractNo?' / '+data.contractNo:''));queueSync('project',p.id,pid?'UPDATE':'CREATE',data);closeModal();save();if(currentProjectId===p.id)renderProjectDetail();if(apiOnline()&&window.syncPendingProjects){await window.syncPendingProjects();await syncInitialProgressPlans();}
+audit(pid?'UPDATE':'CREATE','project',p.id,data.name+(data.contractNo?' / '+data.contractNo:''));queueSync('project',p.id,pid?'UPDATE':'CREATE',data);save();if(apiOnline()&&window.syncPendingProjects){await window.syncPendingProjects();if(showQueuedConflict('project',p.id))return;await syncInitialProgressPlans();}closeModal();if(currentProjectId===p.id)renderProjectDetail();
 }
 function serverProjects(){return (db.projects||[]).filter(p=>!p._localOnly)}
 function projectLabel(p){return (p.code?p.code+' - ':'')+(p.name||'')}

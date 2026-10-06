@@ -76,6 +76,7 @@ async function apiRequest(path, options = {}) {
 
     const error = new Error(message);
     error.status = response.status;
+    error.code = code;
     throw error;
   }
 
@@ -94,6 +95,7 @@ async function apiLogin(username, password) {
 function mapProjectFromApi(p) {
   return {
     id: p.id,
+    rowVersion: p.row_version == null ? null : Number(p.row_version),
     code: p.project_code || p.contract_no || p.code || '',
     name: p.name || '',
     province: p.province ?? p.location ?? '',
@@ -162,7 +164,8 @@ function mapLocalProjectToApiData(data, id) {
     contractor_end_date: data.contractorEndDate || null,
     contractor_duration_days: data.contractorDurationDays ?? null,
     progress: Number(data.progress || 0),
-    status: data.status || 'ACTIVE'
+    status: data.status || 'ACTIVE',
+    expected_row_version: data.expectedRowVersion ?? data.rowVersion ?? null
   };
 }
 
@@ -179,6 +182,7 @@ async function apiUpdateProject(id, data) {
 function mapDailyLogFromApi(log) {
   return {
     id: log.id,
+    rowVersion: log.row_version == null ? null : Number(log.row_version),
     projectId: log.project_id,
     date: log.log_date_text
       ? log.log_date_text
@@ -219,7 +223,8 @@ function mapDocumentFromApi(doc) {
   let details = doc.details || {};
   if (typeof details === 'string') { try { details = JSON.parse(details); } catch (_) { details = {}; } }
   return {
-    id: doc.id, serverId: doc.id, projectId: doc.project_id, code: doc.auto_code || '', type: doc.type || '',
+    id: doc.id, serverId: doc.id,
+    rowVersion: doc.row_version == null ? null : Number(doc.row_version), projectId: doc.project_id, code: doc.auto_code || '', type: doc.type || '',
     name: doc.name || '', group: doc.doc_group === 'REPORT' ? 'REPORT' : 'LEGAL', details,
     version: Number(doc.version || 1), status: doc.status || 'DRAFT',
     createdBy: doc.created_by_name || '', createdById: doc.created_by || '', updatedBy: doc.updated_by_name || '',
@@ -232,6 +237,38 @@ async function apiGetDocuments(projectId) {
   const data = await apiRequest('/documents?project_id=' + encodeURIComponent(projectId));
   return Array.isArray(data) ? data.map(mapDocumentFromApi) : [];
 }
+
+let documentSyncRunning=false;
+async function syncPendingDocuments(){
+  if(!apiOnline()||documentSyncRunning)return;
+  documentSyncRunning=true;
+  try{
+    for(const item of (db.sync||[]).filter(x=>x.type==='document'&&x.status==='PENDING')){
+      item.sending=true;
+      try{
+        const result=item.savedResult||await apiRequest('/documents/'+encodeURIComponent(item.recordId),{method:'PATCH',body:JSON.stringify(item.payload)});
+        item.savedResult=result;
+        save();
+        if(typeof queuedFiles==='function')for(const file of await queuedFiles('document',item.recordId)){
+          const response=await fetch(API_BASE+'/documents/'+encodeURIComponent(item.recordId)+'/files?category='+encodeURIComponent(file.category||'Tài liệu')+'&name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob});
+          if(!response.ok)throw new Error('Chưa tải được tệp '+file.name+' (HTTP '+response.status+')');
+          // Count only our acknowledged writes, never adopt a later reader's version for a draft.
+          item.savedResult.row_version=Number(item.savedResult.row_version)+1;
+          await removeQueuedFile(file.id);
+          save();
+        }
+        upsertLocalDoc(mapDocumentFromApi(await apiRequest('/documents/'+encodeURIComponent(item.recordId))));
+        item.status='SYNCED';
+        delete item.lastError;
+      }catch(error){
+        item.lastError=error.message;item.lastErrorCode=error.code||'';
+        if(error.status===409)item.status='CONFLICT';
+      }finally{delete item.sending}
+    }
+    db.sync=db.sync.filter(x=>x.status!=='SYNCED');save();
+  }finally{documentSyncRunning=false}
+}
+window.syncPendingDocuments=syncPendingDocuments;
 async function apiGetDailyLogs(projectId, filters = {}) {
   if (!projectId) {
     throw new Error('Thiếu projectId khi lấy nhật ký');
@@ -308,7 +345,8 @@ async function apiUpdateDailyLog(id, data) {
       recommendation: data.recommendation || null,
       worker_items: Array.isArray(data.workerItems) ? data.workerItems : null,
       machine_items: Array.isArray(data.machineItems) ? data.machineItems : null,
-      note: data.note || null
+      note: data.note || null,
+      expected_row_version: data.expectedRowVersion ?? data.rowVersion ?? null
     })
   });
 }
@@ -358,7 +396,8 @@ function mapLocalLogToApiData(data) {
     technicalStaffCount: data.technicalStaffCount || null,
     recommendation: data.recommendation || null,
     workerItems: Array.isArray(data.workerItems) ? data.workerItems : null,
-    machineItems: Array.isArray(data.machineItems) ? data.machineItems : null
+    machineItems: Array.isArray(data.machineItems) ? data.machineItems : null,
+    expectedRowVersion: data.expectedRowVersion ?? data.rowVersion ?? null
   };
 }
 
@@ -380,28 +419,36 @@ async function syncPendingProjects() {
     if (!pending.length) return;
 
     for (const item of pending) {
+      item.sending=true;
       try {
         const payload = mapLocalProjectToApiData(item.payload || {}, item.recordId);
         if (item.operation === 'CREATE') {
-          await apiCreateProject(payload);
+          const result = await apiCreateProject(payload);
+          item.savedRowVersion = result.row_version;
         } else if (item.operation === 'UPDATE') {
-          await apiUpdateProject(item.recordId, payload);
+          if (!item.savedRowVersion) {
+            const result = await apiUpdateProject(item.recordId, payload);
+            item.savedRowVersion = result.row_version;
+          }
         } else {
           item.lastError = 'Unsupported project operation: ' + item.operation;
           continue;
         }
+        const localProject=db.projects.find(x=>x.id===item.recordId);if(localProject)localProject.rowVersion=Number(item.savedRowVersion);
         if(typeof syncQueuedProjectFiles==='function')await syncQueuedProjectFiles(item.recordId);
         item.status = 'SYNCED';
         item.syncedAt = new Date().toISOString();
         delete item.lastError;
       } catch (error) {
         item.lastError = error.message;
+        item.lastErrorCode = error.code || '';
+        if (error.status === 409) item.status = 'CONFLICT';
         item.lastAttemptAt = new Date().toISOString();
         // 400/409: máy chủ từ chối vĩnh viễn (trùng mã/số hợp đồng, dữ liệu sai) — không thử lại mãi,
         // đánh dấu để người dùng sửa; công trình vẫn được giữ trên thiết bị.
         if (error.status === 409 || error.status === 400) item.status = 'CONFLICT';
         console.warn('VINA-SUPERVISION: Không đồng bộ được công trình', item.recordId, error.message);
-      }
+      } finally { delete item.sending; }
     }
 
     db.sync = db.sync.filter(x => x.status !== 'SYNCED');
@@ -494,6 +541,7 @@ async function syncPendingDailyLogs() {
     );
 
     for (const item of pending) {
+      item.sending=true;
       try {
         const projectId = item.payload?.projectId;
         if (db.sync.some(x => x.type === 'project' && x.status === 'PENDING' && x.recordId === projectId)) {
@@ -511,6 +559,7 @@ async function syncPendingDailyLogs() {
 
           if (local && result?.id) {
             local.serverId = result.id;
+            local.rowVersion = Number(result.row_version);
             local.status = result.status || local.status;
             local.version = Number(
               result.version || local.version || 1
@@ -528,12 +577,14 @@ async function syncPendingDailyLogs() {
           const local = db.logs.find(x => x.id === item.recordId);
 
           if (local?.serverId) {
-            result = await apiUpdateDailyLog(
+            result = item.savedResult || await apiUpdateDailyLog(
               local.serverId,
               mapLocalLogToApiData(item.payload || local)
             );
+            item.savedResult = result;
 
             if (result) {
+              local.rowVersion = Number(result.row_version);
               await uploadLogAttachments(local, local.serverId);
               local.status = result.status || local.status;
               local.version = Number(
@@ -573,6 +624,8 @@ async function syncPendingDailyLogs() {
         // 409 = trùng ngày + ca trên máy chủ: không thử lại mãi, đánh dấu để người dùng đổi ca.
         item.status = error.status === 409 ? 'CONFLICT' : 'PENDING';
         item.lastError = error.message;
+        item.lastErrorCode = error.code || '';
+        if (error.status === 409) item.status = 'CONFLICT';
         item.lastAttemptAt = new Date().toISOString();
 
         console.warn(
@@ -580,7 +633,7 @@ async function syncPendingDailyLogs() {
           item.recordId,
           error.message
         );
-      }
+      } finally { delete item.sending; }
     }
 
     db.sync = db.sync.filter(x => x.status !== 'SYNCED');
@@ -604,6 +657,7 @@ function mapIssueFromApi(issue) {
     id: issue.id,
     serverId: issue.id,
     ...details,
+    rowVersion: issue.row_version == null ? null : Number(issue.row_version),
     code: issue.issue_code || ('VĐ-' + issue.id.slice(0, 8)),
     projectId: issue.project_id,
     title: issue.title || details.title || '',
@@ -639,6 +693,7 @@ async function syncPendingIssues() {
     await syncPendingProjects();
     const pending = (db.sync || []).filter(x => x.type === 'issue' && x.status === 'PENDING');
     for (const item of pending) {
+      item.sending=true;
       try {
         if (db.sync.some(x => x.type === 'project' && x.status === 'PENDING' && x.recordId === item.payload?.projectId)) continue;
         let result;
@@ -649,17 +704,14 @@ async function syncPendingIssues() {
             title: x.title, description: x.detail, severity: x.priority, due_date: x.due || null, source_type: x.sourceType || null,
             details: issueDetailsPayload({ ...x, id: item.recordId })
           }) });
-        } else if (item.operation === 'UPDATE' && String(x.status || '').toUpperCase() === 'CLOSED') {
-          result = await apiRequest('/issues/' + encodeURIComponent(item.recordId) + '/resolve', {
-            method: 'POST', body: JSON.stringify({ resolution_note: 'Đã đóng trên thiết bị' })
-          });
         } else if (item.operation === 'UPDATE' && x.reopenedAt) {
-          result = await apiRequest('/issues/' + encodeURIComponent(item.recordId) + '/reopen', { method: 'POST' });
+          result = item.savedResult || await apiRequest('/issues/' + encodeURIComponent(item.recordId) + '/reopen', { method: 'POST', body: JSON.stringify({expected_row_version:x.expectedRowVersion??x.rowVersion??null}) });
         } else if (item.operation === 'UPDATE') {
-          result = await apiRequest('/issues/' + encodeURIComponent(item.recordId), {
+          result = item.savedResult || await apiRequest('/issues/' + encodeURIComponent(item.recordId), {
             method: 'PATCH', body: JSON.stringify({
               issue_code: x.code, title: x.title, description: x.detail, severity: x.priority,
-              due_date: x.due || null, source_type: x.sourceType || null, details: issueDetailsPayload(x)
+              due_date: x.due || null, source_type: x.sourceType || null, details: issueDetailsPayload(x),
+              expected_row_version: x.expectedRowVersion ?? x.rowVersion ?? null
             })
           });
         } else {
@@ -667,14 +719,21 @@ async function syncPendingIssues() {
           continue;
         }
         const local = db.issues.find(v => v.id === item.recordId);
-        if (local && result?.id) local.serverId = result.id;
+        item.savedResult = result;
+        if (String(x.status || '').toUpperCase() === 'CLOSED' && !x.reopenedAt) {
+          result = await apiRequest('/issues/' + encodeURIComponent(item.recordId) + '/resolve', {method:'POST',body:JSON.stringify({resolution_note:'Đã đóng trên thiết bị',expected_row_version:result.row_version})});
+          item.savedResult = result;
+        }
+        if (local && result?.id) { local.serverId = result.id; local.rowVersion = Number(result.row_version); delete local.reopenedAt; }
         if (result?.id) await syncQueuedIssueFiles(result.id);
         item.status = 'SYNCED';
         delete item.lastError;
       } catch (error) {
         item.lastError = error.message;
+        item.lastErrorCode = error.code || '';
+        if (error.status === 409) item.status = 'CONFLICT';
         item.lastAttemptAt = new Date().toISOString();
-      }
+      } finally { delete item.sending; }
     }
     db.sync = db.sync.filter(x => x.status !== 'SYNCED');
     save();
@@ -685,7 +744,6 @@ async function syncPendingIssues() {
 
 async function syncIssuesFromApi() {
   if (!apiOnline()) return;
-  const pending = new Set((db.sync || []).filter(x => x.type === 'issue' && x.status === 'PENDING').map(x => x.recordId));
   for (const project of db.projects || []) {
     try {
       const issues = await apiGetIssues(project.id);
@@ -693,7 +751,10 @@ async function syncIssuesFromApi() {
         const mapped = mapIssueFromApi(issue);
         const index = db.issues.findIndex(x => x.id === issue.id || x.serverId === issue.id);
         if (index < 0) db.issues.push(mapped);
-        else if (!pending.has(db.issues[index].id)) db.issues[index] = { ...db.issues[index], ...mapped };
+        else if (!(db.sync||[]).some(x=>x.type==='issue'&&x.recordId===db.issues[index].id&&['PENDING','CONFLICT'].includes(x.status))) {
+          if (Number(mapped.rowVersion)<Number(db.issues[index].rowVersion)) continue;
+          db.issues[index] = { ...db.issues[index], ...mapped };
+        }
       }
     } catch (error) {
       console.warn('Không tải được vấn đề công trình:', project.id, error.message);

@@ -1,3 +1,4 @@
+const { expectedVersion, requireUpdated } = require('../utils/editConflict');
 ﻿const pool = require('../utils/db');
 const { randomUUID } = require('crypto');
 const fileStore = require('./fileStore');
@@ -57,15 +58,17 @@ class IssueService {
     return result.rows[0];
   }
 
-  async resolveIssue(id, resolved_by, resolution_note) {
+  async resolveIssue(id, resolved_by, resolution_note, data) {
     const result = await pool.query(`
       UPDATE issues
       SET status = 'RESOLVED', resolved_by = $1, resolved_at = NOW(), resolution_note = $2, updated_at = NOW()
-      WHERE id = $3 AND status = 'OPEN'
+      WHERE id = $3 AND status = 'OPEN' AND row_version = $4
       RETURNING *
-    `, [resolved_by, resolution_note, id]);
+    `, [resolved_by, resolution_note, id, expectedVersion(data)]);
     if (result.rows[0]) return { issue: result.rows[0], changed: true };
-    return { issue: await this.getIssueById(id), changed: false };
+    const current = await this.getIssueById(id);
+    if (current && current.row_version !== data.expected_row_version) requireUpdated(null);
+    return { issue: current, changed: false };
   }
 
   async updateIssue(id, data) {
@@ -80,20 +83,21 @@ class IssueService {
           source_type = COALESCE($6, source_type),
           details = COALESCE($7::jsonb, details),
           updated_at = NOW()
-      WHERE id = $8
+      WHERE id = $8 AND row_version = $9
       RETURNING *
-    `, [title, description, severity, issue_code, due_date || null, source_type, data.details === undefined ? null : JSON.stringify(data.details || {}), id]);
-    return result.rows[0];
+    `, [title, description, severity, issue_code, due_date || null, source_type, data.details === undefined ? null : JSON.stringify(data.details || {}), id, expectedVersion(data)]);
+    return requireUpdated(result.rows[0]);
   }
 
-  async reopenIssue(id, reopenedBy) {
+  async reopenIssue(id, reopenedBy, data) {
     const result = await pool.query(`
       UPDATE issues
-      SET status = 'OPEN', resolved_by = NULL, resolved_at = NULL, resolution_note = NULL, updated_at = NOW()
-      WHERE id = $1
+      SET status = 'OPEN', resolved_by = NULL, resolved_at = NULL, resolution_note = NULL,
+          details = jsonb_set(COALESCE(details, '{}'::jsonb), '{status}', '"DRAFT"'::jsonb), updated_at = NOW()
+      WHERE id = $1 AND row_version = $2
       RETURNING *
-    `, [id]);
-    return result.rows[0];
+    `, [id, expectedVersion(data)]);
+    return requireUpdated(result.rows[0]);
   }
 
   async deleteIssue(id) {

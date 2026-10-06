@@ -1,3 +1,4 @@
+const { sendEditError } = require('../utils/editConflict');
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
@@ -88,6 +89,7 @@ router.patch('/:id', async (req, res) => {
     await req.audit('issues', req.params.id, 'UPDATE', null, issue, req.user.userId);
     res.json(issue);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -156,11 +158,12 @@ router.post('/:id/resolve', async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Không tìm thấy vấn đề' });
     if (!(await canEditIssue(req.user.userId, current))) return res.status(403).json({ error: 'Chỉ người được cấp quyền Sửa mới được đóng văn bản' });
     const { resolution_note } = req.body;
-    const { issue, changed } = await issueService.resolveIssue(req.params.id, req.user.userId, resolution_note);
+    const { issue, changed } = await issueService.resolveIssue(req.params.id, req.user.userId, resolution_note, req.body);
     if (!issue) return res.status(404).json({ error: 'Không tìm thấy vấn đề' });
     if (changed) await req.audit('issues', req.params.id, 'RESOLVE', null, issue, req.user.userId);
     res.json(issue);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -171,8 +174,8 @@ router.post('/:id/reopen', async (req, res) => {
     const current=await issueService.getIssueById(req.params.id); if(!current)return res.status(404).json({error:'Không tìm thấy vấn đề'});
     const a=await memberPermission(req.user.userId,current.project_id);
     if(!['ADMIN','DIRECTOR'].includes(a.role)&&!a.permissions.includes('EDIT'))return res.status(403).json({error:'Chỉ người được cấp quyền Sửa mới được mở lại văn bản'});
-    const issue=await issueService.reopenIssue(req.params.id,req.user.userId); await req.audit('issues',req.params.id,'REOPEN',current,issue,req.user.userId); res.json(issue);
-  } catch(err){res.status(500).json({error:err.message})}
+    const issue=await issueService.reopenIssue(req.params.id, req.user.userId, req.body); await req.audit('issues',req.params.id,'REOPEN',current,issue,req.user.userId); res.json(issue);
+  } catch(err){if(sendEditError(res,err))return;res.status(500).json({error:err.message})}
 });
 
 // DELETE /api/issues/:id

@@ -1,3 +1,4 @@
+const { sendEditError } = require('../utils/editConflict');
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
@@ -15,6 +16,7 @@ router.use(authMiddleware.verifyToken);
 router.use('/:id', access.record('documents'));
 
 function fail(res, err) {
+  if (sendEditError(res, err)) return;
   if (err.status) return res.status(err.status).json({ error: err.message });
   console.error('documents:', err.message);
   return res.status(500).json({ error: 'Không xử lý được hồ sơ' });
