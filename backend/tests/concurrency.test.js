@@ -61,6 +61,7 @@ test('OCC đổi trạng thái làm bản sửa cũ hết hiệu lực; migratio
   assert.equal(stale.status, 409);assert.equal(stale.body.code, 'EDIT_CONFLICT');
   const before = (await request('GET', path)).body;
   db.psqlFile(require('node:path').join(db.ROOT, 'migrations/20261005_09_optimistic_concurrency.sql'));
+  db.psqlFile(require('node:path').join(db.ROOT, 'migrations/20261006_01_row_version_guard.sql'));
   const after = (await request('GET', path)).body;
   assert.equal(after.row_version, before.row_version);assert.equal(after.status, 'SUBMITTED');
 });

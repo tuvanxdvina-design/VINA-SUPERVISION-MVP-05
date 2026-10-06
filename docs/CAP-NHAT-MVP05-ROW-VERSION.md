@@ -24,7 +24,7 @@ cd ..
 .\run.bat
 ```
 
-Launcher/migration hiện có phải chạy `20261005_09_optimistic_concurrency.sql` và ghi nhận vào `schema_migrations`. Không sửa một migration đã áp dụng. Migration này có thể chạy lại mà không đặt lại `row_version`; mỗi UPDATE tự tăng phiên bản, kể cả đổi trạng thái và cập nhật tiến độ.
+Launcher/migration hiện có phải ghi nhận cả `20261005_09_optimistic_concurrency.sql` (cột phiên bản) và **`20261006_01_row_version_guard.sql`** (trigger) vào `schema_migrations`. Máy Windows có thể đã chạy bản cũ của migration đầu từ phiên chưa commit: không sửa/chạy lại migration đã ghi nhận để cài trigger; migration mới thứ hai đảm nhiệm việc này. Không sửa một migration đã áp dụng. Migration này có thể chạy lại mà không đặt lại `row_version`; mỗi UPDATE tự tăng phiên bản, kể cả đổi trạng thái và cập nhật tiến độ.
 
 ## Truy cập và kiểm tra sau cập nhật
 
