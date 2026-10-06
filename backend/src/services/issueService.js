@@ -92,7 +92,8 @@ class IssueService {
   async reopenIssue(id, reopenedBy, data) {
     const result = await pool.query(`
       UPDATE issues
-      SET status = 'OPEN', resolved_by = NULL, resolved_at = NULL, resolution_note = NULL, updated_at = NOW()
+      SET status = 'OPEN', resolved_by = NULL, resolved_at = NULL, resolution_note = NULL,
+          details = jsonb_set(COALESCE(details, '{}'::jsonb), '{status}', '"DRAFT"'::jsonb), updated_at = NOW()
       WHERE id = $1 AND row_version = $2
       RETURNING *
     `, [id, expectedVersion(data)]);

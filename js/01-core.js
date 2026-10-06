@@ -85,6 +85,7 @@ async function showLogFiles(logId){
 }
 async function logAction(logId,action,silent){
  const l=db.logs.find(v=>v.id===logId);if(!l?.serverId)return alert('Báo cáo ngày chưa lên máy chủ.');
+ if((action==='submit'||action==='confirm')&&(db.sync||[]).some(x=>x.type==='daily_log'&&x.recordId===l.id&&['PENDING','CONFLICT'].includes(x.status)))return alert('Báo cáo ngày còn nội dung chưa đồng bộ hoặc xung đột. Hãy đồng bộ và đối chiếu trước khi gửi duyệt.');
  if((action==='submit'||action==='confirm')&&typeof queuedFileCount==='function'&&await queuedFileCount('daily_log',l.id))return alert('Báo cáo ngày còn ảnh hoặc tài liệu chưa đồng bộ. Hãy kết nối mạng và chờ tải xong trước khi gửi duyệt.');
  if((action==='approve'||action==='reject')&&!silent)return openReviewDecision('daily_logs',l.serverId,action);
  const ask={submit:'Gửi báo cáo ngày này cho Trưởng TVGS duyệt? Sau khi gửi sẽ không sửa được (trừ khi bị trả lại).',confirm:'Xác nhận báo cáo ngày này? Bạn là người có quyền Duyệt tại công trình này nên báo cáo sẽ chuyển thẳng sang Đã duyệt, không qua bước Chờ duyệt.',reject:'Trả lại báo cáo ngày cho người lập sửa?',lock:'Khóa báo cáo ngày? Báo cáo đã khóa là hồ sơ chính thức.'}[action];

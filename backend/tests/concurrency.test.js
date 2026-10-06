@@ -31,20 +31,21 @@ for (const target of targets) {
   test(`OCC ${target.route}: A lưu, B cũ bị từ chối; CAS đồng thời chỉ một người thắng`, async () => {
     const created = await request('POST', '/' + target.route, target.create());assert.equal(created.status, 201);
     const path = '/' + target.route + '/' + created.body.id;
+    const required = target.route === 'projects' ? { contract_no: created.body.contract_no } : {};
     const version = created.body.row_version;assert.ok(Number.isSafeInteger(version));
-    const a = await request('PATCH', path, { [target.field]: 'Bản A', expected_row_version: version }, 'duong');
+    const a = await request('PATCH', path, { ...required, [target.field]: 'Bản A', expected_row_version: version }, 'duong');
     assert.equal(a.status, 200);assert.equal(a.body.row_version, version + 1);
-    const stale = await request('PATCH', path, { [target.field]: 'Bản B cũ', expected_row_version: version, ...(target.route === 'documents' ? { type: 'BB', details: { stale: true } } : {}) });
+    const stale = await request('PATCH', path, { ...required, [target.field]: 'Bản B cũ', expected_row_version: version, ...(target.route === 'documents' ? { type: 'BB', details: { stale: true } } : {}) });
     assert.equal(stale.status, 409);assert.equal(stale.body.code, 'EDIT_CONFLICT');
     const current = (await request('GET', path)).body;
     assert.equal(current[target.field], 'Bản A');assert.equal(current.row_version, a.body.row_version);
     if (target.route === 'documents') { assert.equal(current.type, 'HS');assert.deepEqual(current.details, { marker: 'MVP05' }); }
     if (target.route === 'issues') assert.equal(current.details.recipients[0].name, 'Giữ chức năng MVP05');
     for (const invalid of [undefined, null, 0, -1, '1', 1.5]) {
-      const rejected = await request('PATCH', path, { [target.field]: 'Không được ghi', expected_row_version: invalid });
+      const rejected = await request('PATCH', path, { ...required, [target.field]: 'Không được ghi', expected_row_version: invalid });
       assert.equal(rejected.status, 409);assert.equal(rejected.body.code, 'ROW_VERSION_REQUIRED');
     }
-    const parallel = await Promise.all(['A đồng thời', 'B đồng thời'].map((value, i) => request('PATCH', path, { [target.field]: value, expected_row_version: current.row_version }, i ? 'admin' : 'duong')));
+    const parallel = await Promise.all(['A đồng thời', 'B đồng thời'].map((value, i) => request('PATCH', path, { ...required, [target.field]: value, expected_row_version: current.row_version }, i ? 'admin' : 'duong')));
     assert.deepEqual(parallel.map(x => x.status).sort(), [200, 409]);
     const winner = parallel.find(x => x.status === 200).body;
     const final = (await request('GET', path)).body;

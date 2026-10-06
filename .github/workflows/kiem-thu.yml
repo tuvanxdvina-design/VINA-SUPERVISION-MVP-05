@@ -50,6 +50,7 @@ jobs:
           mkdir -p tests/ci-results
           if node --test --test-reporter=spec tests/regression.test.js > tests/ci-results/regression.txt 2>&1; then result=0; else result=$?; fi
           cat tests/ci-results/regression.txt
+          node scripts/report-ci.js tests/ci-results/regression.txt regression "$result"
           exit "$result"
         working-directory: backend
       - name: Xung dot A/B va luu dong thoi (4 bang)
@@ -58,6 +59,7 @@ jobs:
           mkdir -p tests/ci-results
           if node --test --test-reporter=spec tests/concurrency.test.js > tests/ci-results/concurrency.txt 2>&1; then result=0; else result=$?; fi
           cat tests/ci-results/concurrency.txt
+          node scripts/report-ci.js tests/ci-results/concurrency.txt concurrency "$result"
           exit "$result"
         working-directory: backend
       - name: Giao dien (Chrome khong man hinh)
@@ -66,6 +68,7 @@ jobs:
           mkdir -p tests/ci-results
           if node --test --test-reporter=spec tests/ui/all.test.js > tests/ci-results/ui.txt 2>&1; then result=0; else result=$?; fi
           cat tests/ci-results/ui.txt
+          node scripts/report-ci.js tests/ci-results/ui.txt ui "$result"
           exit "$result"
         working-directory: backend
       - name: Luu ket qua tung bo va anh loi giao dien

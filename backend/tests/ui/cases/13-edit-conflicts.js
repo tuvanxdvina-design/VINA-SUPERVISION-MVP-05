@@ -32,7 +32,7 @@ module.exports = function register() {
       const record=await fixture(b,target,pid,'online-'+target.type);
       await openFixture(page,target,record);await page.fill(target.input,'Nội dung B đang nhập');
       const path='/'+target.route+'/'+record.id;
-      const saved=await a.patch(path,{[target.field]:'Bản A đã lưu',expected_row_version:record.row_version});assert.equal(saved.status,200);
+      const saved=await a.patch(path,{...(target.type==='project'?{contract_no:record.contract_no}:{}),[target.field]:'Bản A đã lưu',expected_row_version:record.row_version});assert.equal(saved.status,200);
       // Bộ nhớ đã tải phiên bản mới nhưng biểu mẫu vẫn phải gửi phiên bản lúc mở.
       await page.evaluate(({t,id,v})=>{db[t.collection].find(x=>x.id===id).rowVersion=v;},{t:target,id:record.id,v:saved.body.row_version});
       await page.evaluate(async ({t,id})=>{await window[t.save](id);},{t:target,id:record.id});
@@ -62,7 +62,7 @@ module.exports = function register() {
       await page.context().setOffline(true);
       await page.evaluate(async({t,id})=>{await window[t.save](id);},{t:target,id:record.id});
       const path='/'+target.route+'/'+record.id;
-      assert.equal((await a.patch(path,{[target.field]:'A khi B mất mạng',expected_row_version:record.row_version})).status,200);
+      assert.equal((await a.patch(path,{...(target.type==='project'?{contract_no:record.contract_no}:{}),[target.field]:'A khi B mất mạng',expected_row_version:record.row_version})).status,200);
       await page.context().setOffline(false);
       const sync={project:'syncPendingProjects',daily_log:'syncPendingDailyLogs',document:'syncPendingDocuments',issue:'syncPendingIssues'}[target.type];
       await page.evaluate(async fn=>{await window[fn]();},sync);
