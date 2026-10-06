@@ -59,7 +59,7 @@ let currentLogPackage=null;
 async function openLog(lid=''){
 if(!canEditDailyLog())return alert('Tài khoản hiện tại không được lập hoặc sửa báo cáo ngày.');
 if(!db.projects.length)return alert('Hãy tạo công trình trước.');
-let x=db.logs.find(l=>l.id===lid)||{};const isEdit=!!lid;
+let x=db.logs.find(l=>l.id===lid)||{};const isEdit=!!lid;captureEditVersion('daily_log',lid,x);
 logPhotoPicks=[];
 if(isEdit&&!canEditLog(x))return alert('Báo cáo ngày này không còn được phép sửa.');
 const logProjects=isEdit?(db.projects||[]).filter(p=>p.id===x.projectId):logProjectsForCreate();if(!logProjects.length)return alert('Tài khoản chưa được cấp quyền "Thêm" báo cáo ngày ở công trình nào.');
@@ -103,11 +103,13 @@ const actor=typeof getAuthUser==='function'?getAuthUser():null;const actorId=exi
 const dupLog=db.logs.find(l=>l.id!==existing?.id&&l.projectId===lproj.value&&l.date===ldate.value&&String(l.shift||'CA1')===shift&&(l.createdById||'')===actorId);if(dupLog)return alert('Tài khoản này đã có báo cáo ngày '+shiftLabel(shift)+' ngày '+ldate.value+'. Hãy mở báo cáo đó để sửa.');
 const workerItems=readResourceRows('lworkers'),machineItems=readResourceRows('lmachines');
 const workers=workerItems.reduce((s,x)=>s+x.count,0),machines=machineItems.reduce((s,x)=>s+x.count,0);
-const data={projectId:lproj.value,date:ldate.value,shift,work:lwork.value,weather:(document.getElementById('lweather')?.value||'').trim(),workers,machines,workerItems,machineItems,note:lnote.value,contractorUnit:(document.getElementById('lcontractorunit')?.value||'').trim(),itemCategory:(document.getElementById('litemcategory')?.value||'').trim(),technicalStaffCount:+(document.getElementById('lcbkt')?.value||0),recommendation:(document.getElementById('lrecommendation')?.value||'').trim(),photos,documents,status:existing?.status||'DRAFT',createdBy:existing?.createdBy||(actor?.full_name||db.role),createdById:actorId,version:(existing?.version||0)+1,updatedAt:new Date().toISOString()};
+const data={expectedRowVersion:editVersion('daily_log',lid,existing),projectId:lproj.value,date:ldate.value,shift,work:lwork.value,weather:(document.getElementById('lweather')?.value||'').trim(),workers,machines,workerItems,machineItems,note:lnote.value,contractorUnit:(document.getElementById('lcontractorunit')?.value||'').trim(),itemCategory:(document.getElementById('litemcategory')?.value||'').trim(),technicalStaffCount:+(document.getElementById('lcbkt')?.value||0),recommendation:(document.getElementById('lrecommendation')?.value||'').trim(),photos,documents,status:existing?.status||'DRAFT',createdBy:existing?.createdBy||(actor?.full_name||db.role),createdById:actorId,version:(existing?.version||0)+1,updatedAt:new Date().toISOString()};
 if(existing){Object.assign(existing,data);audit('UPDATE','daily_log',existing.id,`v${existing.version}`);queueSync('daily_log',existing.id,'UPDATE',data)}else{const x={id:id(),...data,createdAt:new Date().toISOString(),version:1};db.logs.unshift(x);queueSync('daily_log',x.id,'CREATE',data);audit('CREATE_AND_CONFIRM','daily_log',x.id,'v1')}
 const savedId=existing?.id||db.logs[0]?.id;
 const queuedEntries=[...photoFiles.map(file=>({file,kind:'PHOTO',category:'Ảnh hiện trường'})),...docFiles.map(file=>({file,kind:'DOCUMENT',category:'Tài liệu báo cáo ngày'}))];if(queuedEntries.length)await queueOfflineFiles('daily_log',savedId,queuedEntries);
-closeModal();save();if(typeof getAuthToken==='function'&&getAuthToken()&&window.syncPendingDailyLogs)await window.syncPendingDailyLogs();
+save();if(typeof getAuthToken==='function'&&getAuthToken()&&window.syncPendingDailyLogs)await window.syncPendingDailyLogs();
+if(showQueuedConflict('daily_log',savedId))return;
+closeModal();
 if(submitAfter){const l=db.logs.find(v=>v.id===savedId);if(l?.serverId&&l.status==='DRAFT')await logAction(l.id,canApproveIn(l.projectId)?'confirm':'submit',true);else if(l&&!l.serverId)alert('Báo cáo ngày đã lưu trên thiết bị nhưng chưa lên máy chủ (mất mạng?). Sẽ gửi duyệt được sau khi đồng bộ.')}
 if(currentProjectId)renderProjectDetail();
 }
@@ -164,7 +166,7 @@ async function syncDailyLogsFromApi(){
         // Bản đã có trên máy chủ mà máy chủ không trả về nữa (đã xóa, hoặc là nháp của người khác) → bỏ khỏi thiết bị.
         // Giữ lại: bản chưa lên máy chủ, bản mới có mã sau khi bắt đầu tải, bản còn thay đổi chờ đồng bộ.
         const remoteIds = new Set(remoteLogs.map(r => r.id));
-        const pendingIds = new Set((db.sync || []).filter(q => q.type === 'daily_log' && q.status === 'PENDING').map(q => q.recordId));
+        const pendingIds = new Set((db.sync || []).filter(q => q.type === 'daily_log' && ['PENDING','CONFLICT'].includes(q.status)).map(q => q.recordId));
         db.logs = db.logs.filter(x => !(x.projectId === project.id && x.serverId && knownBefore.has(x.serverId) && !remoteIds.has(x.serverId) && !pendingIds.has(x.id)));
 
         for(const remoteLog of remoteLogs){
@@ -181,6 +183,7 @@ async function syncDailyLogsFromApi(){
 
           if(localIndex >= 0){
             const localId = db.logs[localIndex].id;
+            if (pendingIds.has(localId)) continue;
 
             db.logs[localIndex] = {
               ...db.logs[localIndex],

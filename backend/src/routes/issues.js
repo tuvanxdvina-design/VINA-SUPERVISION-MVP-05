@@ -1,3 +1,4 @@
+const { sendEditError } = require('../utils/editConflict');
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
@@ -35,6 +36,7 @@ router.get('/', access.query, async (req, res) => {
     const issues = await issueService.getAllIssues(project_id, { status });
     res.json(issues);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -45,6 +47,7 @@ router.get('/:id', async (req, res) => {
     const issue = await issueService.getIssueById(req.params.id);
     res.json(issue || {});
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -71,6 +74,7 @@ router.post('/', access.body, async (req, res) => {
     if (created) await req.audit('issues', issue.id, 'CREATE', null, issue, req.user.userId);
     res.status(created ? 201 : 200).json(issue);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     if (err.code === '23505') return res.status(409).json({ error: 'Mã vấn đề đã tồn tại' });
     res.status(500).json({ error: err.message });
   }
@@ -88,6 +92,7 @@ router.patch('/:id', async (req, res) => {
     await req.audit('issues', req.params.id, 'UPDATE', null, issue, req.user.userId);
     res.json(issue);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -100,6 +105,7 @@ router.get('/:id/files', async (req, res) => {
   try {
     res.json(await issueService.listFiles(req.params.id));
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -117,6 +123,7 @@ router.post('/:id/files', express.raw({ type: () => true, limit: MAX_ISSUE_FILE 
     if (file.created) await req.audit('issue_files', file.id, 'CREATE', null, { issue_id: req.params.id, name, size: req.body.length }, req.user.userId);
     res.status(file.created ? 201 : 200).json(file);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Tệp đính kèm tối đa 15 MB' });
     res.status(500).json({ error: err.message });
   }
@@ -129,6 +136,7 @@ router.get('/:id/files/:fileId', async (req, res) => {
     if (!file) return res.status(404).json({ error: 'Không tìm thấy tệp' });
     sendStoredFile(res, file, req.query.download);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -145,6 +153,7 @@ router.post('/:id/assign', rbac.checkRole([rbac.ROLES.ADMIN, rbac.ROLES.DIRECTOR
     await req.audit('issues', req.params.id, 'ASSIGN', null, issue, req.user.userId);
     res.json(issue);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -156,11 +165,12 @@ router.post('/:id/resolve', async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Không tìm thấy vấn đề' });
     if (!(await canEditIssue(req.user.userId, current))) return res.status(403).json({ error: 'Chỉ người được cấp quyền Sửa mới được đóng văn bản' });
     const { resolution_note } = req.body;
-    const { issue, changed } = await issueService.resolveIssue(req.params.id, req.user.userId, resolution_note);
+    const { issue, changed } = await issueService.resolveIssue(req.params.id, req.user.userId, resolution_note, req.body);
     if (!issue) return res.status(404).json({ error: 'Không tìm thấy vấn đề' });
     if (changed) await req.audit('issues', req.params.id, 'RESOLVE', null, issue, req.user.userId);
     res.json(issue);
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(500).json({ error: err.message });
   }
 });
@@ -171,7 +181,7 @@ router.post('/:id/reopen', async (req, res) => {
     const current=await issueService.getIssueById(req.params.id); if(!current)return res.status(404).json({error:'Không tìm thấy vấn đề'});
     const a=await memberPermission(req.user.userId,current.project_id);
     if(!['ADMIN','DIRECTOR'].includes(a.role)&&!a.permissions.includes('EDIT'))return res.status(403).json({error:'Chỉ người được cấp quyền Sửa mới được mở lại văn bản'});
-    const issue=await issueService.reopenIssue(req.params.id,req.user.userId); await req.audit('issues',req.params.id,'REOPEN',current,issue,req.user.userId); res.json(issue);
+    const issue=await issueService.reopenIssue(req.params.id, req.user.userId, req.body); await req.audit('issues',req.params.id,'REOPEN',current,issue,req.user.userId); res.json(issue);
   } catch(err){res.status(500).json({error:err.message})}
 });
 
@@ -189,6 +199,7 @@ router.delete('/:id', async (req, res) => {
     await req.audit('issues', req.params.id, 'DELETE', { title: current.title, status: current.status }, { recycle_id: recycleId, reason }, req.user.userId);
     res.json({ ok: true, recycle_id: recycleId });
   } catch (err) {
+    if (sendEditError(res, err)) return;
     res.status(err.status || 500).json({ error: err.message });
   }
 });

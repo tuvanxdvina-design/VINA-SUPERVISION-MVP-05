@@ -1,5 +1,5 @@
 # Kiểm thử tự động trên GitHub mỗi lần đẩy mã / mở PR.
-# Chạy đúng 3 bộ như backend\scripts\kiem-tra-tat-ca.cmd (cú pháp giao diện + hồi quy + giao diện),
+# Chạy cú pháp, hồi quy, xung đột A/B và giao diện (kể cả ngoại tuyến),
 # trên PostgreSQL 16 dựng tạm và Google Chrome có sẵn của máy chạy GitHub — không đụng CSDL thật.
 name: Kiem thu
 
@@ -28,12 +28,13 @@ jobs:
       # Khóa ký phiên đăng nhập chỉ dùng cho lượt chạy này (backend từ chối chạy khi thiếu).
       JWT_SECRET: ci-only-${{ github.run_id }}-${{ github.run_attempt }}-khong-dung-o-may-that
       TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_regr_ci
+      CONFLICT_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_reg_conflict_ci
       UI_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_ui_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --no-audit --no-fund
@@ -44,15 +45,35 @@ jobs:
         run: node --test backend/tests/jsUnits.test.js
         working-directory: .
       - name: Hoi quy (API + CSDL)
-        run: node --test tests/regression.test.js
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p tests/ci-results
+          if node --test --test-reporter=spec tests/regression.test.js > tests/ci-results/regression.txt 2>&1; then result=0; else result=$?; fi
+          cat tests/ci-results/regression.txt
+          exit "$result"
+        working-directory: backend
+      - name: Xung dot A/B va luu dong thoi (4 bang)
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p tests/ci-results
+          if node --test --test-reporter=spec tests/concurrency.test.js > tests/ci-results/concurrency.txt 2>&1; then result=0; else result=$?; fi
+          cat tests/ci-results/concurrency.txt
+          exit "$result"
         working-directory: backend
       - name: Giao dien (Chrome khong man hinh)
-        run: node --test --test-reporter=spec tests/ui/all.test.js
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p tests/ci-results
+          if node --test --test-reporter=spec tests/ui/all.test.js > tests/ci-results/ui.txt 2>&1; then result=0; else result=$?; fi
+          cat tests/ci-results/ui.txt
+          exit "$result"
         working-directory: backend
-      - name: Luu anh loi giao dien
-        if: failure()
+      - name: Luu ket qua tung bo va anh loi giao dien
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ui-artifacts
-          path: backend/tests/ui-artifacts/
+          name: test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            backend/tests/ci-results/
+            backend/tests/ui-artifacts/
           if-no-files-found: ignore

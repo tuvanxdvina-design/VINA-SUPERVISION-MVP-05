@@ -1,3 +1,4 @@
+const { sendEditError } = require('../utils/editConflict');
 const express = require('express');
 const projectService = require('../services/projectService');
 const auth = require('../middleware/auth');
@@ -26,6 +27,7 @@ function validProject(data) {
 }
 
 function sendError(res, error) {
+  if (sendEditError(res, error)) return;
   if (error.code === '23505') return res.status(409).json({ error: 'Mã hoặc số hợp đồng đã tồn tại' });
   if (error.code === '22P02') return res.status(400).json({ error: 'ID không hợp lệ' });
   if (error.code === '23514') return res.status(400).json({ error: 'Dữ liệu vi phạm ràng buộc (ngày/tỷ lệ không hợp lệ)' });

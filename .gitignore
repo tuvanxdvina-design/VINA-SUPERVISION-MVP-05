@@ -24,6 +24,7 @@ backend/tests/last-regression.txt
 backend/tests/last-ui-test.txt
 backend/tests/last-summary.txt
 backend/tests/ui-artifacts/
+backend/tests/ci-results/
 .superpowers/
 
 # Bản sao lưu thủ công (đã chuyển ra _archive-VINA-MVP-02)

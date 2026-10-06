@@ -26,6 +26,7 @@ const dbUserFromUrl = (url) => decodeURIComponent(new URL(url).username);
 function createTestDb(dbUrl) {
   const u = new URL(dbUrl);
   const dbName = u.pathname.slice(1);
+  if (!/^vina_(reg|ui)[a-z0-9_]*$/.test(dbName)) throw new Error('Chỉ cho phép CSDL thử riêng vina_reg* hoặc vina_ui*');
   const adminUrl = new URL(dbUrl); adminUrl.pathname = '/postgres';
 
   function psql(sql, url = dbUrl) {

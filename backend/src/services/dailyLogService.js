@@ -1,3 +1,4 @@
+const { expectedVersion, requireUpdated } = require('../utils/editConflict');
 const pool = require('../utils/db');
 const { randomUUID, createHash } = require('crypto');
 const { lastReviewSql } = require('./reviewService');
@@ -182,13 +183,13 @@ class DailyLogService {
           updated_at = NOW()
       -- Bản nháp: chỉ người lập (có quyền Thêm) sửa; quyền Sửa tại công trình không còn cho sửa nháp người khác.
       -- ($11 = quyền Sửa, giữ chỗ để không phải đánh số lại các tham số sau.)
-      WHERE id = $7 AND ($9::boolean OR (status = 'DRAFT' AND created_by = $8 AND $10::boolean AND $11::boolean IS NOT NULL))
+      WHERE id = $7 AND row_version = $19 AND ($9::boolean OR (status = 'DRAFT' AND created_by = $8 AND $10::boolean AND $11::boolean IS NOT NULL))
        RETURNING *, TO_CHAR(log_date, 'YYYY-MM-DD') AS log_date_text
     `, [work_summary, weather, workerCount, machineCount, progress, note, id, actorId,
         ['ADMIN', 'DIRECTOR'].includes(perms.role), perms.permissions.includes('CREATE'), perms.permissions.includes('EDIT'), shiftCode,
         contractor_unit || null, item_category || null, technical_staff_count ?? null, recommendation || null,
-        workerItems ? JSON.stringify(workerItems) : null, machineItems ? JSON.stringify(machineItems) : null]);
-    return result.rows[0];
+        workerItems ? JSON.stringify(workerItems) : null, machineItems ? JSON.stringify(machineItems) : null, expectedVersion(data)]);
+    return requireUpdated(result.rows[0]);
   }
 
   // Chỉ xóa nhật ký còn ở trạng thái nháp.
