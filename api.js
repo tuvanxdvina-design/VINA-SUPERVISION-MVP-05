@@ -248,13 +248,18 @@ async function syncPendingDocuments(){
       try{
         const result=item.savedResult||await apiRequest('/documents/'+encodeURIComponent(item.recordId),{method:'PATCH',body:JSON.stringify(item.payload)});
         item.savedResult=result;
+        save();
         if(typeof queuedFiles==='function')for(const file of await queuedFiles('document',item.recordId)){
           const response=await fetch(API_BASE+'/documents/'+encodeURIComponent(item.recordId)+'/files?category='+encodeURIComponent(file.category||'Tài liệu')+'&name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob});
           if(!response.ok)throw new Error('Chưa tải được tệp '+file.name+' (HTTP '+response.status+')');
+          // Count only our acknowledged writes, never adopt a later reader's version for a draft.
+          item.savedResult.row_version=Number(item.savedResult.row_version)+1;
           await removeQueuedFile(file.id);
+          save();
         }
         upsertLocalDoc(mapDocumentFromApi(await apiRequest('/documents/'+encodeURIComponent(item.recordId))));
         item.status='SYNCED';
+        delete item.lastError;
       }catch(error){
         item.lastError=error.message;item.lastErrorCode=error.code||'';
         if(error.status===409)item.status='CONFLICT';

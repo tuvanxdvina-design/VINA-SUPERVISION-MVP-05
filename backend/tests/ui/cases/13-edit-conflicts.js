@@ -24,6 +24,79 @@ async function openFixture(page, target, record) {
   await page.waitForSelector('#modal.show ' + target.input);
 }
 module.exports = function register() {
+  for(const competingEdit of [false,true]){
+    uiTest('GD-OCC hồ sơ: tải tệp lỗi rồi thử lại '+(competingEdit?'vẫn chặn bản sửa mới của người khác':'không PATCH hoặc tải trùng tệp'),async page=>{
+      await loginViaApi(page,'admin');
+      const api=apiAs(await tokenOf('admin'));
+      const pid=await projectIdByContract(await tokenOf('admin'),'001');
+      const target=targets.find(x=>x.type==='document');
+      const record=await fixture(api,target,pid,'file-retry-'+competingEdit);
+      await openFixture(page,target,record);await page.fill('#dname','B đã lưu thông tin');
+      await page.locator('#mbody input[type=file][multiple]').last().setInputFiles([
+        {name:'first.txt',mimeType:'text/plain',buffer:Buffer.from('first attachment')},
+        {name:'retry.txt',mimeType:'text/plain',buffer:Buffer.from('retry attachment')}
+      ]);
+      let patches=0;const uploads=[];let failUpload=true;
+      page.on('request',r=>{if(r.method()==='PATCH'&&r.url().endsWith('/documents/'+record.id))patches++});
+      await page.route('**/api/documents/'+record.id+'/files?**',async route=>{
+        const name=new URL(route.request().url()).searchParams.get('name');uploads.push(name);
+        if(name==='retry.txt'&&failUpload)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Temporary upload failure"}'});
+        return route.continue();
+      });
+      await page.evaluate(id=>saveDoc(id),record.id);
+      assert.equal(patches,1);
+      assert.equal(await page.evaluate(id=>queuedFileCount('document',id),record.id),1);
+      assert.equal(await page.locator('#modal.show').count(),1);
+      const saved=(await api.get('/documents/'+record.id)).body;
+      assert.equal(saved.files.length,1);assert.equal(saved.name,'B đã lưu thông tin');
+      if(competingEdit){
+        const changed=await api.patch('/documents/'+record.id,{name:'A sửa sau B',expected_row_version:saved.row_version});assert.equal(changed.status,200);
+        await page.fill('#dname','B sửa tiếp từ bản cũ');
+      }
+      failUpload=false;
+      await page.evaluate(id=>saveDoc(id),record.id);
+      const latest=(await api.get('/documents/'+record.id)).body;
+      if(competingEdit){
+        assert.match(await page.locator('#docMessage').innerText(),/người khác cập nhật/);
+        assert.equal(latest.name,'A sửa sau B');assert.equal(latest.files.length,1);
+        assert.equal(await page.locator('#dname').inputValue(),'B sửa tiếp từ bản cũ');
+        assert.equal(await page.evaluate(id=>queuedFileCount('document',id),record.id),1);
+      }else{
+        assert.equal(patches,1);assert.deepEqual(uploads,['first.txt','retry.txt','retry.txt']);
+        assert.equal(latest.files.length,2);assert.equal(latest.row_version,record.row_version+3);
+        assert.equal(await page.evaluate(id=>queuedFileCount('document',id),record.id),0);
+        assert.equal(await page.evaluate(id=>db.sync.some(x=>x.recordId===id),record.id),false);
+        assert.equal(await page.locator('#modal.show').count(),0);
+      }
+    });
+  }
+  uiTest('GD-OCC hồ sơ: GET lỗi sau PATCH giữ checkpoint qua tải lại, không gửi lại thông tin hoặc tệp',async page=>{
+    await loginViaApi(page,'admin');
+    const api=apiAs(await tokenOf('admin'));
+    const pid=await projectIdByContract(await tokenOf('admin'),'001');
+    const target=targets.find(x=>x.type==='document');
+    const record=await fixture(api,target,pid,'get-retry');
+    await openFixture(page,target,record);await page.fill('#dname','Thông tin đã được lưu');
+    await page.locator('#mbody input[type=file][multiple]').last().setInputFiles({name:'saved.txt',mimeType:'text/plain',buffer:Buffer.from('saved only once')});
+    let patches=0,uploads=0,failGet=true;
+    page.on('request',r=>{
+      if(r.method()==='PATCH'&&r.url().endsWith('/documents/'+record.id))patches++;
+      if(r.method()==='POST'&&r.url().includes('/documents/'+record.id+'/files?'))uploads++;
+    });
+    await page.route('**/api/documents/'+record.id,route=>route.request().method()==='GET'&&failGet?route.abort('failed'):route.continue());
+    await page.evaluate(id=>saveDoc(id),record.id);
+    const checkpoint=await page.evaluate(id=>db.sync.find(x=>x.recordId===id),record.id);
+    assert.equal(checkpoint.status,'PENDING');assert.equal(checkpoint.savedResult.row_version,record.row_version+2);
+    assert.equal(await page.evaluate(id=>queuedFileCount('document',id),record.id),0);
+    await page.reload();await page.waitForSelector('nav button[data-page="projects"]',{state:'visible'});
+    assert.ok(await page.evaluate(id=>db.sync.find(x=>x.recordId===id)?.savedResult,record.id));
+    failGet=false;
+    await page.evaluate(()=>syncPendingDocuments());
+    await page.waitForFunction(id=>!db.sync.some(x=>x.recordId===id),record.id);
+    const latest=(await api.get('/documents/'+record.id)).body;
+    assert.equal(latest.name,'Thông tin đã được lưu');assert.equal(latest.files.length,1);
+    assert.equal(latest.row_version,record.row_version+2);assert.equal(patches,1);assert.equal(uploads,1);
+  });
   for (const target of targets) {
     uiTest(`GD-OCC ${target.type}: giữ biểu mẫu B, giữ bản A, tải lại không xóa nháp`, async page => {
       const user = await loginViaApi(page, 'admin');

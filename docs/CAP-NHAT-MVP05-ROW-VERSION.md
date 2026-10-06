@@ -1,6 +1,8 @@
 # Cập nhật MVP-05: chống ghi đè khi nhiều người sửa
 
-Build: `2026-10-06.1-mvp05`. Chỉ cập nhật MVP-05, không sử dụng DB/cổng của MVP-03/MVP-04.
+Build: `2026-10-06.2-mvp05`. Chỉ cập nhật MVP-05, không sử dụng DB/cổng của MVP-03/MVP-04.
+
+Bản .2 giữ kết quả lưu thông tin hồ sơ và tệp còn chờ trong hàng đợi. Khi tải tệp hoặc tải lại hồ sơ lỗi, thử lại chỉ tiếp tục phần chưa hoàn tất; không gửi lại PATCH đã thành công hoặc tải lại tệp đã xác nhận. Nếu người dùng sửa nội dung tiếp, vẫn kiểm tra phiên bản từ lần ghi đã xác nhận của chính họ, không tự dùng phiên bản mới của người khác.
 
 ## Trước khi cập nhật máy Windows
 
