@@ -9,7 +9,7 @@ const targets = [
 ];
 async function fixture(api, target, pid, suffix) {
   const payload = target.type === 'project' ? { project_code: 'UI-OCC-' + suffix, contract_no: 'UI-OCC-' + suffix, name: 'Gốc' }
-    : target.type === 'daily_log' ? { project_id: pid, log_date: '2026-10-06', shift: 'OCC-' + suffix, work_summary: 'Gốc' }
+    : target.type === 'daily_log' ? { project_id: pid, log_date: suffix.startsWith('online') ? '2020-01-01' : suffix.startsWith('offline') ? '2020-01-02' : '2020-01-03', shift: 'CA3', work_summary: 'Gốc' }
     : target.type === 'document' ? { project_id: pid, type: 'HS', doc_group: 'LEGAL', name: 'Gốc', details: {} }
     : { project_id: pid, title: 'Gốc', issue_code: 'UI-OCC-' + suffix, details: { documentType: 'MINUTES', status: 'DRAFT', recipients: [{ name: 'Người nhận MVP05', unit: 'VINA' }] } };
   const created = await api.post('/' + target.route, payload);assert.equal(created.status, 201);return created.body;
@@ -72,5 +72,65 @@ module.exports = function register() {
       const draft=await page.evaluate(({t,id})=>db[t.collection].find(x=>x.id===id),{t:target,id:record.id});
       assert.equal(draft[target.type==='daily_log'?'work':target.field],'B ngoại tuyến');
     });
+    uiTest(`GD-OCC ${target.type}: ngoại tuyến → mạng lại, bản hợp lệ đồng bộ đúng một lần`, async page => {
+      await loginViaApi(page,'admin');
+      const b=apiAs(await tokenOf('admin'));
+      const pid=await projectIdByContract(await tokenOf('admin'),'001');
+      const record=await fixture(b,target,pid,'success-'+target.type);
+      await openFixture(page,target,record);await page.fill(target.input,'B lưu khi mất mạng');
+      await page.context().setOffline(true);
+      await page.evaluate(async({t,id})=>{await window[t.save](id);},{t:target,id:record.id});
+      await page.context().setOffline(false);
+      const sync={project:'syncPendingProjects',daily_log:'syncPendingDailyLogs',document:'syncPendingDocuments',issue:'syncPendingIssues'}[target.type];
+      await page.evaluate(async fn=>{await window[fn]();},sync);
+      await page.waitForFunction(({t,id})=>!db.sync.some(x=>x.type===t.type&&x.recordId===id),{t:target,id:record.id});
+      const before=(await b.get('/'+target.route+'/'+record.id)).body;
+      assert.equal(before[target.field],'B lưu khi mất mạng');assert.equal(before.row_version,record.row_version+1);
+      await page.evaluate(async fn=>{await window[fn]();},sync);
+      assert.equal((await b.get('/'+target.route+'/'+record.id)).body.row_version,before.row_version);
+    });
   }
+  uiTest('GD-OCC báo cáo tổng hợp: bản cũ giữ nhận xét, không ghi tiến độ trước khi phát hiện xung đột', async page => {
+    await loginViaApi(page,'admin');
+    const b=apiAs(await tokenOf('admin')),a=apiAs(await tokenOf('duong'));
+    const pid=await projectIdByContract(await tokenOf('admin'),'001');
+    const compiled=await b.get('/reports/compile?project_id='+pid+'&type=DAILY&from=2026-10-06');assert.equal(compiled.status,200);
+    const created=await b.post('/documents',{project_id:pid,type:'BC',doc_group:'REPORT',name:'Báo cáo OCC',details:{reportType:'DAILY',snapshot:compiled.body,sections:{quality:'Gốc'}}});assert.equal(created.status,201);
+    await page.evaluate(raw=>{upsertLocalDoc(mapDocumentFromApi(raw));openReport(raw.id);},created.body);
+    await page.fill('#rpEditor textarea[data-sec="quality"]','Nhận xét B đang nhập');
+    const path='/documents/'+created.body.id;
+    assert.equal((await a.patch(path,{name:'Báo cáo A',expected_row_version:created.body.row_version,details:{...created.body.details,sections:{quality:'Nhận xét A'}}})).status,200);
+    let progressWrites=0;page.on('request',request=>{if(request.method()==='POST'&&/progress-plans.*actuals/.test(request.url()))progressWrites++});
+    await page.evaluate(()=>saveReport(false));
+    assert.equal(await page.locator('#rpEditor textarea[data-sec="quality"]').inputValue(),'Nhận xét B đang nhập');
+    assert.match(await page.locator('#rpMessage').innerText(),/người khác cập nhật/);
+    assert.equal(progressWrites,0);assert.equal((await b.get(path)).body.details.sections.quality,'Nhận xét A');
+  });
+  uiTest('GD-OCC chất lượng: response tải lại đến muộn không thay bản vừa xung đột', async page => {
+    await loginViaApi(page,'admin');
+    const b=apiAs(await tokenOf('admin')),a=apiAs(await tokenOf('duong'));
+    const pid=await projectIdByContract(await tokenOf('admin'),'001');
+    const target=targets.find(x=>x.type==='issue');
+    const record=await fixture(b,target,pid,'delayed-issue');
+    await openFixture(page,target,record);await page.fill('#ititle','B giữ khi response muộn');
+    assert.equal((await a.patch('/issues/'+record.id,{title:'A giữ trên máy chủ',expected_row_version:record.row_version})).status,200);
+    let ready,release;
+    const held=new Promise(resolve=>{ready=resolve});
+    const gate=new Promise(resolve=>{release=resolve});
+    let intercepted=false;
+    await page.route('**/api/issues?project_id='+pid,async route=>{
+      if(intercepted)return route.continue();
+      intercepted=true;const response=await route.fetch();ready();await gate;await route.fulfill({response});
+    });
+    try{
+      await page.evaluate(()=>{window.__heldIssueRefresh=syncIssuesFromApi()});
+      await held;
+      await page.evaluate(id=>saveQualityDocument(id),record.id);
+    }finally{release()}
+    await page.evaluate(()=>window.__heldIssueRefresh);
+    const local=await page.evaluate(id=>db.issues.find(x=>x.id===id),record.id);
+    assert.equal(local.title,'B giữ khi response muộn');
+    assert.equal(await page.evaluate(id=>db.sync.find(x=>x.recordId===id)?.status,record.id),'CONFLICT');
+    assert.equal((await b.get('/issues/'+record.id)).body.title,'A giữ trên máy chủ');
+  });
 };

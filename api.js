@@ -735,7 +735,6 @@ async function syncPendingIssues() {
 
 async function syncIssuesFromApi() {
   if (!apiOnline()) return;
-  const pending = new Set((db.sync || []).filter(x => x.type === 'issue' && ['PENDING','CONFLICT'].includes(x.status)).map(x => x.recordId));
   for (const project of db.projects || []) {
     try {
       const issues = await apiGetIssues(project.id);
@@ -743,7 +742,10 @@ async function syncIssuesFromApi() {
         const mapped = mapIssueFromApi(issue);
         const index = db.issues.findIndex(x => x.id === issue.id || x.serverId === issue.id);
         if (index < 0) db.issues.push(mapped);
-        else if (!pending.has(db.issues[index].id)) db.issues[index] = { ...db.issues[index], ...mapped };
+        else if (!(db.sync||[]).some(x=>x.type==='issue'&&x.recordId===db.issues[index].id&&['PENDING','CONFLICT'].includes(x.status))) {
+          if (Number(mapped.rowVersion)<Number(db.issues[index].rowVersion)) continue;
+          db.issues[index] = { ...db.issues[index], ...mapped };
+        }
       }
     } catch (error) {
       console.warn('Không tải được vấn đề công trình:', project.id, error.message);
