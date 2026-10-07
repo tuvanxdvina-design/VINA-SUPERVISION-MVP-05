@@ -116,6 +116,7 @@ if(currentProjectId)renderProjectDetail();
 function exportDailyLog(lid){
 const x=db.logs.find(l=>l.id===lid);
 if(!x)return;
+if(!canDownloadIn(x.projectId))return alert('Bạn chưa được cấp quyền tải xuống tại công trình này.');
 const project=db.projects.find(p=>p.id===x.projectId)||{};
 const lines=[
 'VINA-SUPERVISION - BÁO CÁO NGÀY CÔNG TRÌNH',

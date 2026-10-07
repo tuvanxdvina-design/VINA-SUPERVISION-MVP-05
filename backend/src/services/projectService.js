@@ -2,6 +2,7 @@ const { expectedVersion, requireUpdated } = require('../utils/editConflict');
 const pool = require('../utils/db');
 const { randomUUID } = require('crypto');
 const fileStore = require('./fileStore');
+const permissionService = require('./permissionService');
 
 async function attachFiles(projects) {
   if (!projects.length) return projects;
@@ -59,7 +60,8 @@ class ProjectService {
       )
       ORDER BY p.created_at DESC
     `, [userId]);
-    return attachFiles(result.rows);
+    const permissions = await permissionService.allForUser(userId);
+    return attachFiles(result.rows.filter(p => permissions[p.id]?.permissions.includes('VIEW')));
   }
 
   async getProjectById(id) {

@@ -73,7 +73,7 @@ function logActionsHtml(x){
  if(x.serverId&&x.status==='APPROVED'&&isLogLead(x.projectId))b.push('<button onclick="logAction(\''+x.id+'\',\'lock\')">Khóa</button>');
  if(canReopenLog(x))b.push('<button onclick="reopenLog(\''+x.id+'\')">Mở lại</button>');
  if(x.serverId&&(x.fileCount||x.photoCount))b.push('<button onclick="showLogFiles(\''+x.id+'\')">Tệp ('+((x.fileCount||0)+(x.photoCount||0))+')</button>');
- b.push('<button onclick="exportDailyLog(\''+x.id+'\')">Xuất</button>');
+ if(canDownloadIn(x.projectId))b.push('<button onclick="exportDailyLog(\''+x.id+'\')">Xuất</button>');
  if(x.serverId)b.push(deleteBtn('log',x.serverId,x.projectId,'Báo cáo ngày '+progressDate(x.date)+' — '+shiftLabel(x.shift)));
  return b.join(' ');
 }
@@ -177,6 +177,8 @@ async function safeFileBlob(res){
 }
 // Mở/tải tệp từ máy chủ có kèm token đăng nhập
 async function openServerFile(apiPath,meta,download){
+ const match=apiPath.match(/^\/(documents|daily-logs|issues|projects)\/([^/]+)\//);
+ if(match){const collection={documents:'docs','daily-logs':'logs',issues:'issues',projects:'projects'}[match[1]];const record=(db[collection]||[]).find(x=>x.id===match[2]||x.serverId===match[2]);if(record&&!canDownloadIn(match[1]==='projects'?record.id:record.projectId))return alert('Bạn chưa được cấp quyền tải xuống tại công trình này.');}
  if(!apiOnline())return alert('Cần kết nối mạng để mở tệp.');
  const viewable=/^(application\/pdf|image\/)/i.test(meta?.type||'')||/\.(pdf|png|jpe?g|webp|gif)$/i.test(meta?.name||'');
  if(!viewable)download=true;
@@ -192,6 +194,7 @@ async function openServerFile(apiPath,meta,download){
 }
 function docFileLinks(x,{withDelete=false}={}){
  const files=x.files||[];if(!files.length)return '<span class="muted">Chưa có tệp</span>';
+ if(!canDownloadIn(x.projectId))return files.map(f=>'<span class="muted">'+esc(f.name)+'</span>').join(', ');
  const groups={};files.forEach(f=>{(groups[f.category||'Tài liệu']=groups[f.category||'Tài liệu']||[]).push(f)});
  return Object.entries(groups).map(([cat,list])=>'<div style="margin:3px 0"><b>'+esc(cat)+'</b>: '+list.map(f=>'<a href="#" onclick="openServerFile(\'/documents/'+x.id+'/files/'+f.id+'\','+esc(JSON.stringify({name:f.name,type:f.type}))+',false);return false">'+esc(f.name)+'</a> <span class="muted">('+fileSize(f.size)+')</span>'+(withDelete?' <button type="button" class="danger" style="padding:2px 6px" onclick="deleteDocFile(\''+x.id+'\',\''+f.id+'\')">✕</button>':'')).join(', ')+'</div>').join('');
 }

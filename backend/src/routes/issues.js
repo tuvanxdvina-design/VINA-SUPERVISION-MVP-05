@@ -125,7 +125,7 @@ router.post('/:id/files', express.raw({ type: () => true, limit: MAX_ISSUE_FILE 
 });
 
 // GET /api/issues/:id/files/:fileId
-router.get('/:id/files/:fileId', async (req, res) => {
+router.get('/:id/files/:fileId', permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     const file = await issueService.getFile(req.params.id, req.params.fileId);
     if (!file) return res.status(404).json({ error: 'Không tìm thấy tệp' });

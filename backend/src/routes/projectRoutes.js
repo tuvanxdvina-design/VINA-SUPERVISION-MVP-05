@@ -101,7 +101,7 @@ router.post('/:id/files', access.projectParam, canEditHere, express.raw({ type: 
   }
 });
 
-router.get('/:id/files/:fileId', access.projectParam, async (req, res) => {
+router.get('/:id/files/:fileId', access.projectParam, permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     const file = await projectService.getFile(req.params.id, req.params.fileId);
     if (!file) return res.status(404).json({ error: 'Không tìm thấy tệp' });
@@ -178,7 +178,7 @@ router.get('/:id/progress-plans/:planId', access.projectParam, async (req, res) 
 });
 
 // Tệp gốc: trả nội dung nhị phân để trình duyệt mở/tải (không dùng data: URL — Chrome chặn mở tab mới)
-router.get('/:id/progress-plans/:planId/file', access.projectParam, async (req, res) => {
+router.get('/:id/progress-plans/:planId/file', access.projectParam, permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     const f = await projectProgressService.getFile(req.params.id, req.params.planId);
     if (!f) return res.status(404).json({ error: 'Bảng tiến độ chưa có tệp đính kèm' });

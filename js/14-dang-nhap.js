@@ -17,7 +17,7 @@ async function saveChangePassword(){
  try{await apiRequest('/auth/change-password',{method:'POST',body:JSON.stringify({old_password:o,new_password:n})});alert('Đã đổi mật khẩu. Hãy đăng nhập lại bằng mật khẩu mới.');if(typeof clearAuthSession==='function')clearAuthSession();location.reload()}
  catch(error){m.textContent=error.message}
 }
-const APP_BUILD='2026-10-06.2-mvp05';
+const APP_BUILD='2026-10-07.1-mvp05';
 async function checkServerMigrations(){
  if(!apiOnline())return;
  try{const base=API_BASE.replace(/\/api$/,'');const h=await (await fetch(base+'/health',{cache:'no-store'})).json();

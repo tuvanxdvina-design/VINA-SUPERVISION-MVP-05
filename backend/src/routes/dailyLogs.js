@@ -128,7 +128,7 @@ router.get('/:id/attachments', async (req, res) => {
   catch (error) { res.status(500).json({ error: 'Không tải được ảnh báo cáo ngày' }); }
 });
 
-router.get('/:id/attachments/:attachmentId', async (req, res) => {
+router.get('/:id/attachments/:attachmentId', permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     const photo = await attachments.content(req.params.id, req.params.attachmentId);
     if (!photo) return res.status(404).json({ error: 'Không tìm thấy ảnh' });
@@ -180,6 +180,12 @@ router.post('/', access.body, permissionService.requirePermission('CREATE'), asy
 router.patch('/:id', async (req, res) => {
   try {
     const perms = await permissionService.forUser(req.user.userId, req.projectId);
+    const current = await dailyLogService.getDailyLogById(req.params.id);
+    if (current?.status === 'LOCKED') return res.status(409).json({ error: 'Báo cáo ngày đã khóa; cần mở lại trước khi sửa' });
+    if (current && !['ADMIN', 'DIRECTOR'].includes(perms.role) &&
+        (current.created_by !== req.user.userId || !perms.permissions.includes('CREATE') || current.status !== 'DRAFT')) {
+      return res.status(403).json({ error: 'Chỉ người lập có quyền Thêm được sửa báo cáo ngày còn là bản nháp' });
+    }
     const log = await dailyLogService.updateDailyLog(req.params.id, req.body, req.user.userId, perms);
     if (!log) {
       return res.status(409).json({ error: 'Báo cáo ngày không tồn tại hoặc không còn ở trạng thái DRAFT' });
@@ -234,6 +240,7 @@ router.post('/:id/files', express.raw({ type: () => true, limit: MAX_FILE + 1024
     if (!log) return res.status(404).json({ error: 'Không tìm thấy báo cáo ngày' });
     const p = await permissionService.forUser(req.user.userId, log.project_id);
     const manager = ['ADMIN', 'DIRECTOR'].includes(p.role);
+    if (log.status === 'LOCKED') return res.status(409).json({ error: 'Báo cáo ngày đã khóa; cần mở lại trước khi thêm tệp' });
     if (!(manager || (log.created_by === req.user.userId && p.permissions.includes('CREATE')))) return res.status(403).json({ error: 'Không có quyền thêm tệp cho báo cáo ngày này' });
     if (!manager && log.status !== 'DRAFT') return res.status(409).json({ error: 'Chỉ thêm tệp khi báo cáo ngày còn là bản nháp' });
     if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Tệp rỗng' });
@@ -242,7 +249,7 @@ router.post('/:id/files', express.raw({ type: () => true, limit: MAX_FILE + 1024
     res.status(f.created ? 201 : 200).json(f);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-router.get('/:id/files/:fileId', async (req, res) => {
+router.get('/:id/files/:fileId', permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     const f = await dailyLogService.getFile(req.params.id, req.params.fileId);
     if (!f) return res.status(404).json({ error: 'Không tìm thấy tệp' });
