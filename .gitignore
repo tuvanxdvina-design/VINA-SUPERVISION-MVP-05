@@ -1,6 +1,7 @@
 # Bí mật — KHÔNG BAO GIỜ đưa vào Git
 .env
 backend/.env
+backend/.env.jwt-*.tmp
 *.env
 Token*.txt
 Pas user.xlsx
