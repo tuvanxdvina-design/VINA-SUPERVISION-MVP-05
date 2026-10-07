@@ -37,10 +37,12 @@ module.exports = function register() {
   uiTest('GD-22 mobile: bang danh sach hien thanh the, nut thao tac nam trong man hinh khong can cuon ngang', async page => {
     await loginViaApi(page, 'admin');
     await openPage(page, 'projects');
-    await page.waitForSelector('#projectsTable table.mcards tbody tr');
-    const r = await page.evaluate(() => {
+    // Background project refresh can replace the table between separate await calls.
+    // Capture the existing table and its layout in one browser turn; keep all assertions below.
+    const sample = await page.waitForFunction(() => {
       const t = document.querySelector('#projectsTable table.mcards');
-      const tr = t.querySelector('tbody tr');
+      const tr = t?.querySelector('tbody tr');
+      if (!tr) return null;
       const btn = tr.querySelector('td.mc-actions button');
       const b = btn && btn.getBoundingClientRect();
       return {
@@ -51,6 +53,8 @@ module.exports = function register() {
         docWidth: document.documentElement.scrollWidth
       };
     });
+    const r = await sample.jsonValue();
+    await sample.dispose();
     assert.ok(r.theadHidden, 'tieu de bang phai an (nhan nam trong tung the)');
     assert.equal(r.rowBlock, 'block', 'moi dong phai hien thanh the');
     assert.ok(r.label, 'o phai co nhan cot');

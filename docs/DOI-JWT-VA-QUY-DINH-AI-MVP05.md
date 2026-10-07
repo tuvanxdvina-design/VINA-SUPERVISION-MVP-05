@@ -62,7 +62,7 @@ Khi cổng 3004 đã trống, chạy `run.bat` tại MVP-05 và đọc toàn b�
 
 Chuyển riêng các tệp `Token eyJ….txt` và `Pas user.xlsx` nếu chúng tồn tại ra khỏi repository vào nơi được người vận hành chọn, có quyền truy cập phù hợp, không thuộc Samsung_T5. Không mở nội dung, không ghi đè tệp cùng tên ở nơi cất, không xóa các bản sao chưa xác minh. Hai tệp này được gitignore nhưng vẫn là dữ liệu nhạy cảm trên đĩa.
 
-Chỉ xóa `.env.bak` sau khi mọi bước kiểm tra bắt buộc đạt và người vận hành xác nhận. Xóa bản sao lưu tạm này không đồng nghĩa bảo đảm xóa an toàn trên SSD hoặc mọi bản sao lịch sử.
+Chỉ xóa `.env.bak` sau khi mọi bước kiểm tra bắt buộc đạt và kết quả đã được ghi nhận theo yêu cầu dọn dẹp của người dùng. Xóa bản sao lưu tạm này không đồng nghĩa bảo đảm xóa an toàn trên SSD hoặc mọi bản sao lịch sử.
 
 Nếu đăng nhập lỗi: trước tiên lưu lỗi đã che thông tin và xác định có phải lỗi JWT hay tài khoản/DB. Nếu cần khôi phục, dừng đúng backend MVP-05, khôi phục .env từ .env.bak rồi khởi động lại thực sự và kiểm tra. Việc dùng lại khóa cũ có thể làm token cũ chưa hết hạn được chấp nhận lại; không gọi rollback là biện pháp bảo mật tốt hơn. Nếu khóa cũ đã bị lộ, ưu tiên sửa cấu hình với khóa mới, không phục hồi khóa đã lộ.
 
