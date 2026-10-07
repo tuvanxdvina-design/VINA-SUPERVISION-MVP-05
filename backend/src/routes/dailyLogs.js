@@ -183,8 +183,11 @@ router.patch('/:id', async (req, res) => {
     const current = await dailyLogService.getDailyLogById(req.params.id);
     if (current?.status === 'LOCKED') return res.status(409).json({ error: 'Báo cáo ngày đã khóa; cần mở lại trước khi sửa' });
     if (current && !['ADMIN', 'DIRECTOR'].includes(perms.role) &&
-        (current.created_by !== req.user.userId || !perms.permissions.includes('CREATE') || current.status !== 'DRAFT')) {
+        (current.created_by !== req.user.userId || !perms.permissions.includes('CREATE'))) {
       return res.status(403).json({ error: 'Chỉ người lập có quyền Thêm được sửa báo cáo ngày còn là bản nháp' });
+    }
+    if (current && !['ADMIN', 'DIRECTOR'].includes(perms.role) && current.status !== 'DRAFT') {
+      return res.status(409).json({ error: 'Báo cáo ngày không còn là bản nháp; cần trả lại hoặc mở lại trước khi sửa' });
     }
     const log = await dailyLogService.updateDailyLog(req.params.id, req.body, req.user.userId, perms);
     if (!log) {

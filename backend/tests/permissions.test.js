@@ -228,3 +228,15 @@ test('PQ19: LOCKED chặn sửa/thêm tệp ngay cả Admin/Giám đốc; mở l
     expect(await users.ks.api.patch(p,{name:'Sửa sau mở lại',work_summary:'Sửa sau mở lại',expected_row_version:reopened.row_version}),200);
   }
 });
+test('PQ20: hộp việc không lộ báo cáo/hồ sơ của công trình đã thu hồi VIEW', async () => {
+  for(const route of ['daily-logs','documents']){
+    const r=await record(users,fixture,route), p=pathOf(route,r);await submit(route,r);
+    expect(await users.gst.api.post(p+'/reject',{comment:'Cần bổ sung thử quyền'}),200);
+  }
+  const before=expect(await users.ks.api.get('/reviews/inbox'),200);
+  assert.ok(before.returned.some(r=>r.project_id===fixture.projects.A.id));
+  expect(await users.admin.api.put('/project-members/'+fixture.members.A.ks.id,{access_permissions:[]}),200);
+  const after=expect(await users.ks.api.get('/reviews/inbox'),200);
+  assert.ok(!after.returned.some(r=>r.project_id===fixture.projects.A.id));
+  assert.ok(!after.approved.some(r=>r.project_id===fixture.projects.A.id));
+});

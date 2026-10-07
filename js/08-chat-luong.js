@@ -1,7 +1,7 @@
 const qualityPermissionCache = new Map(Object.entries(db.myPermissions||{}).map(([pid,v])=>[String(pid),{permissions:Array.isArray(v?.permissions)?v.permissions:[]}]));
 function qualityIsOwner(x){if(!x)return false;const uid=qualityAuthUserId();if(uid&&[x.createdById,x.createdByUserId,x.created_by].some(v=>String(v||'')===uid))return true;const u=qualityAuthUser();if(u&&x.createdBy&&!x.createdById&&!x.createdByUserId){const owner=String(u.full_name||u.username||'').trim().toLowerCase();if(owner&&owner===String(x.createdBy).trim().toLowerCase())return true}if(!uid&&String(x.createdBy||'')===String(db.role||''))return true;return false}
 function qualityCanCreate(projectId){if(qualityIsManager())return true;if(typeof getAuthToken!=='function'||!getAuthToken())return true;const p=qualityPermissions(projectId);return p.includes('CREATE')||p.includes('EDIT')}
-function qualityCanEdit(x){if(!x)return false;if(qualityIsManager())return true;const p=qualityPermissions(x.projectId);if(p.includes('EDIT'))return true;return !qualityIsLocked(x)&&qualityIsOwner(x)}
+function qualityCanEdit(x){if(!x)return false;if(qualityIsManager())return true;const p=qualityPermissions(x.projectId);if(p.includes('EDIT'))return true;return p.includes('CREATE')&&!qualityIsLocked(x)&&qualityIsOwner(x)}
 function qualityCanClose(x){return !!x&&!qualityIsLocked(x)&&qualityCanEdit(x)}
 function qualityCanReopen(x){return !!x&&qualityIsLocked(x)&&(qualityIsManager()||qualityPermissions(x.projectId).includes('EDIT'))}
 const qualityType=x=>x.documentType==='LETTER'||String(x.sourceType||'').toLowerCase().includes('th\u01b0')?'LETTER':(x.documentType==='MINUTES'||String(x.sourceType||'').toLowerCase().includes('bi\u00ean')?'MINUTES':'UNKNOWN');

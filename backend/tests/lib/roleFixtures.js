@@ -54,9 +54,9 @@ async function createProjects(users) {
 }
 async function record(users, fixture, route, ct='A', who='ks') {
   const suffix = ++sequence, pid = fixture.projects[ct].id;
-  const payload = route === 'daily-logs' ? { project_id:pid, log_date:'2026-10-07', shift:'PQ' + suffix, work_summary:'Báo cáo thử ' + suffix }
-    : route === 'documents' ? { project_id:pid, type:'HS', name:'Hồ sơ thử ' + suffix }
-    : { project_id:pid, issue_code:'PQ' + suffix, title:'Văn bản thử ' + suffix, details:{ documentType:'MINUTES', status:'DRAFT' } };
+  const payload = route === 'daily-logs' ? { project_id:pid, log_date:'2026-10-07', shift:'PQ' + suffix, work_summary:'Báo cáo thử [' + suffix + ']' }
+    : route === 'documents' ? { project_id:pid, type:'HS', name:'Hồ sơ thử [' + suffix + ']' }
+    : { project_id:pid, issue_code:'PQ' + suffix, title:'Văn bản thử [' + suffix + ']', details:{ documentType:'MINUTES', status:'DRAFT' } };
   return expect(await users[who].api.post('/' + route, payload), 201);
 }
 module.exports = { client, expect, createUsers, createProjects, record };

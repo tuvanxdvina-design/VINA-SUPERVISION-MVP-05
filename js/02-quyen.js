@@ -32,6 +32,7 @@ function canEditLog(log){
   if(!log || log.status==='LOCKED') return false;
   if(isPrivilegedLogEditor()) return true;
   if(log.status!=='DRAFT') return false;
+  if(!qualityPermissions(log.projectId).includes('CREATE')) return false;
   if(typeof log.canEdit==='boolean') return log.canEdit;
   const uid=typeof getAuthUser==='function' ? (getAuthUser()?.id||'') : '';
   if(uid && log.createdById) return log.createdById===uid;

@@ -276,7 +276,6 @@ class ProjectPersonnelService {
     let list = permissions === undefined ? (current ? current.access_permissions : null) : permissions;
     if (list !== null) {
       list = permissionService.normalizeList(list);
-      if (!list.length) list = ['VIEW'];
     }
     const scope = workScope === undefined ? (current?.work_scope || '') : String(workScope || '').trim();
     await client.query(`

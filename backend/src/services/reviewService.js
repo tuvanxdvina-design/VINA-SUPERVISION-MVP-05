@@ -76,6 +76,7 @@ async function inbox(userId) {
   const role = (await pool.query(`SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1 AND u.is_active`, [userId])).rows[0]?.name || '';
   const company = ['ADMIN', 'DIRECTOR'].includes(role);
   const perms = await permissionService.allForUser(userId);
+  const readable = new Set(Object.entries(perms).filter(([,v]) => v.permissions.includes('VIEW')).map(([id]) => id));
   const approverProjects = Object.entries(perms).filter(([, v]) => v.source !== 'GLOBAL_ROLE' && v.permissions.includes('APPROVE')).map(([k]) => k);
   const canReview = company || approverProjects.length > 0;
 
@@ -113,8 +114,9 @@ async function inbox(userId) {
     ORDER BY reviewed_at DESC LIMIT 50`, [userId])).rows;
   return {
     can_review: canReview, is_company: company, approver_projects: approverProjects,
-    to_review: toReview, escalated, monitor, returned, approved,
-    counts: { to_review: toReview.length, returned: returned.length }
+    to_review: toReview, escalated, monitor,
+    returned: returned.filter(r => readable.has(r.project_id)), approved: approved.filter(r => readable.has(r.project_id)),
+    counts: { to_review: toReview.length, returned: returned.filter(r => readable.has(r.project_id)).length }
   };
 }
 
