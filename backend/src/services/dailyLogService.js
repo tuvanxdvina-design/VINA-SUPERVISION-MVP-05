@@ -26,7 +26,7 @@ class DailyLogService {
              (SELECT COUNT(*)::int FROM daily_log_files f WHERE f.daily_log_id = dl.id) AS file_count,
              ${lastReviewSql('daily_logs', 'dl')} AS last_review,
              COALESCE(dl.author_name, u.full_name) as created_by_name, a.full_name as approved_by_name,
-             ($3::boolean OR (dl.status = 'DRAFT' AND dl.created_by = $2 AND $4::boolean)) AS can_edit
+             (dl.status <> 'LOCKED' AND ($3::boolean OR (dl.status = 'DRAFT' AND dl.created_by = $2 AND $4::boolean))) AS can_edit
       FROM daily_logs dl
       LEFT JOIN users u ON dl.created_by = u.id
       LEFT JOIN users a ON dl.approved_by = a.id
@@ -53,16 +53,19 @@ class DailyLogService {
   }
 
   // GET single daily log
-  async getDailyLogById(id) {
+  async getDailyLogById(id, { userId = null, permissions = { role: '', permissions: [] } } = {}) {
     const result = await pool.query(`
       SELECT dl.*, TO_CHAR(dl.log_date, 'YYYY-MM-DD') AS log_date_text,
              (SELECT COUNT(*)::int FROM attachments a WHERE a.daily_log_id = dl.id) AS photo_count,
+             (SELECT COUNT(*)::int FROM daily_log_files f WHERE f.daily_log_id = dl.id) AS file_count,
+             ${lastReviewSql('daily_logs', 'dl')} AS last_review,
+             (dl.status <> 'LOCKED' AND ($3::boolean OR (dl.status = 'DRAFT' AND dl.created_by = $2 AND $4::boolean))) AS can_edit,
              COALESCE(dl.author_name, u.full_name) as created_by_name, a.full_name as approved_by_name
       FROM daily_logs dl
       LEFT JOIN users u ON dl.created_by = u.id
       LEFT JOIN users a ON dl.approved_by = a.id
       WHERE dl.id = $1
-    `, [id]);
+    `, [id, userId, ['ADMIN', 'DIRECTOR'].includes(permissions.role), permissions.permissions.includes('CREATE')]);
     return result.rows[0];
   }
 
@@ -183,7 +186,7 @@ class DailyLogService {
           updated_at = NOW()
       -- Bản nháp: chỉ người lập (có quyền Thêm) sửa; quyền Sửa tại công trình không còn cho sửa nháp người khác.
       -- ($11 = quyền Sửa, giữ chỗ để không phải đánh số lại các tham số sau.)
-      WHERE id = $7 AND row_version = $19 AND ($9::boolean OR (status = 'DRAFT' AND created_by = $8 AND $10::boolean AND $11::boolean IS NOT NULL))
+      WHERE id = $7 AND row_version = $19 AND status <> 'LOCKED' AND ($9::boolean OR (status = 'DRAFT' AND created_by = $8 AND $10::boolean AND $11::boolean IS NOT NULL))
        RETURNING *, TO_CHAR(log_date, 'YYYY-MM-DD') AS log_date_text
     `, [work_summary, weather, workerCount, machineCount, progress, note, id, actorId,
         ['ADMIN', 'DIRECTOR'].includes(perms.role), perms.permissions.includes('CREATE'), perms.permissions.includes('EDIT'), shiftCode,

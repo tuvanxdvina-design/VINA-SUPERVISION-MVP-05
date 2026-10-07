@@ -29,9 +29,10 @@ function canEditDailyLog(){
   return logProjectsForCreate().length>0||(db.logs||[]).some(l=>canEditLog(l));
 }
 function canEditLog(log){
-  if(!log) return false;
+  if(!log || log.status==='LOCKED') return false;
   if(isPrivilegedLogEditor()) return true;
   if(log.status!=='DRAFT') return false;
+  if(!qualityPermissions(log.projectId).includes('CREATE')) return false;
   if(typeof log.canEdit==='boolean') return log.canEdit;
   const uid=typeof getAuthUser==='function' ? (getAuthUser()?.id||'') : '';
   if(uid && log.createdById) return log.createdById===uid;
@@ -54,7 +55,8 @@ function canApproveIn(pid){return canManageAssignments()||qualityPermissions(pid
 // Bản đã "Trình công ty" thì chỉ Giám đốc/Admin quyết định
 function docCanDecide(x){return !!x&&canApproveIn(x.projectId)&&(canManageAssignments()||x.status!=='SUBMITTED'||x.lastReview?.action!=='ESCALATE')}
 function canCreateDocIn(pid){return myPerms(pid).includes('CREATE')}
-function canModifyDoc(x){if(!x)return false;if(canManageAssignments())return true;if(x.serverId&&x.status&&x.status!=='DRAFT')return false;if(x.status==='LOCKED')return false;const p=myPerms(x.projectId);return p.includes('EDIT')||(x.createdById&&x.createdById===qualityAuthUserId()&&p.includes('CREATE'))}
+function canDownloadIn(pid){return myPerms(pid).includes('DOWNLOAD')}
+function canModifyDoc(x){if(!x||x.status==='LOCKED')return false;if(canManageAssignments())return true;if(x.serverId&&x.status&&x.status!=='DRAFT')return false;const p=myPerms(x.projectId);return p.includes('EDIT')||(x.createdById&&x.createdById===qualityAuthUserId()&&p.includes('CREATE'))}
 
 // ============================================================================
 // NHÂN SỰ & QUYỀN THEO CÔNG TRÌNH — một nguồn dữ liệu duy nhất

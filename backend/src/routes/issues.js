@@ -1,7 +1,6 @@
 const { sendEditError } = require('../utils/editConflict');
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
-const rbac = require('../middleware/rbac');
 const issueService = require('../services/issueService');
 const access = require('../middleware/projectAccess');
 const pool = require('../utils/db');
@@ -125,7 +124,7 @@ router.post('/:id/files', express.raw({ type: () => true, limit: MAX_ISSUE_FILE 
 });
 
 // GET /api/issues/:id/files/:fileId
-router.get('/:id/files/:fileId', async (req, res) => {
+router.get('/:id/files/:fileId', permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     const file = await issueService.getFile(req.params.id, req.params.fileId);
     if (!file) return res.status(404).json({ error: 'Không tìm thấy tệp' });
@@ -136,7 +135,7 @@ router.get('/:id/files/:fileId', async (req, res) => {
 });
 
 // POST /api/issues/:id/assign
-router.post('/:id/assign', rbac.checkRole([rbac.ROLES.ADMIN, rbac.ROLES.DIRECTOR, rbac.ROLES.TVGS_LEAD]), async (req, res) => {
+router.post('/:id/assign', permissionService.requirePermission('EDIT'), async (req, res) => {
   try {
     const assigned_to = req.body?.assigned_to || null;
     if (assigned_to) {

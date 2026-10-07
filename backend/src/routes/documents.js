@@ -25,6 +25,7 @@ function fail(res, err) {
 // Quyền sửa một hồ sơ: Admin/Giám đốc; người có quyền "Sửa"; người lập (có quyền "Thêm") — chỉ khi còn NHÁP.
 // Hồ sơ đã gửi duyệt/đã duyệt phải "Trả lại" (hoặc mở lại) rồi mới sửa, để nội dung đã duyệt không bị đổi ngầm.
 async function canModify(req, doc) {
+  if (doc.status === 'LOCKED') return false;
   const p = await permissionService.forUser(req.user.userId, doc.project_id);
   if (['ADMIN', 'DIRECTOR'].includes(p.role)) return true;
   if (doc.status !== 'DRAFT') return false;
@@ -95,7 +96,7 @@ router.post('/:id/files', loadDoc, express.raw({ type: () => true, limit: MAX_FI
   }
 });
 
-router.get('/:id/files/:fileId', loadDoc, async (req, res) => {
+router.get('/:id/files/:fileId', loadDoc, permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     const f = await documentService.getFile(req.params.id, req.params.fileId);
     if (!f) return res.status(404).json({ error: 'Không tìm thấy tệp' });

@@ -144,7 +144,10 @@ router.post('/:id/files', rbac.checkRole(managers), loadPersonnel, express.raw({
   }
 });
 
-router.get('/:id/files/:fileId', loadPersonnel, async (req, res) => {
+router.get('/:id/files/:fileId', loadPersonnel, (req, res, next) => {
+  req.projectId = req.personnel.project_id;
+  next();
+}, permissionService.requirePermission('DOWNLOAD'), async (req, res) => {
   try {
     if (!await access.allowed(req.user, req.personnel.project_id)) return res.status(403).json({ error: 'Không có quyền truy cập công trình' });
     const file = await service.getFile(req.params.id, req.params.fileId);

@@ -77,7 +77,7 @@ class DocumentService {
     const result = await pool.query(`
       UPDATE documents SET name = COALESCE(NULLIF($1, ''), name), doc_group = $2, details = $3::jsonb,
         updated_by = $4, updated_at = NOW(), type = $6
-      WHERE id = $5 AND row_version = $7 RETURNING id`,
+      WHERE id = $5 AND row_version = $7 AND status <> 'LOCKED' RETURNING id`,
     [data.name || '', data.doc_group === 'REPORT' || data.doc_group === 'LEGAL' ? data.doc_group : cur.doc_group,
       JSON.stringify(data.details !== undefined ? data.details : cur.details || {}), actorId, id, type, expectedVersion(data)]);
     requireUpdated(result.rows[0]);

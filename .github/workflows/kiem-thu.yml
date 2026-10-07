@@ -29,6 +29,7 @@ jobs:
       JWT_SECRET: ci-only-${{ github.run_id }}-${{ github.run_attempt }}-khong-dung-o-may-that
       TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_regr_ci
       CONFLICT_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_reg_conflict_ci
+      PERMISSION_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_reg_permissions_ci
       UI_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_ui_ci
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +61,15 @@ jobs:
           if node --test --test-reporter=spec tests/concurrency.test.js > tests/ci-results/concurrency.txt 2>&1; then result=0; else result=$?; fi
           cat tests/ci-results/concurrency.txt
           node scripts/report-ci.js tests/ci-results/concurrency.txt concurrency "$result"
+          exit "$result"
+        working-directory: backend
+      - name: Phan quyen theo vai tro - Viec 4 (API, DB rieng)
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p tests/ci-results
+          if node --test --test-reporter=spec tests/permissions.test.js > tests/ci-results/permissions.txt 2>&1; then result=0; else result=$?; fi
+          cat tests/ci-results/permissions.txt
+          node scripts/report-ci.js tests/ci-results/permissions.txt permissions "$result"
           exit "$result"
         working-directory: backend
       - name: Giao dien (Chrome khong man hinh)
