@@ -13,6 +13,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  jwt-key:
+    name: JWT key (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: backend
+      - name: Kiem tra cong cu JWT tren tep gia lap, khong doc .env that
+        shell: bash
+        working-directory: backend
+        run: |
+          mkdir -p tests/ci-results
+          if node --test --test-reporter=spec tests/jwtSecret.test.js > tests/ci-results/jwt-key.txt 2>&1; then result=0; else result=$?; fi
+          cat tests/ci-results/jwt-key.txt
+          node scripts/report-ci.js tests/ci-results/jwt-key.txt jwt-key "$result"
+          exit "$result"
   kiem-thu:
     runs-on: ubuntu-latest
     timeout-minutes: 25
