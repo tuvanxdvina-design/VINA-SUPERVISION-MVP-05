@@ -97,7 +97,7 @@ module.exports=function(){
       const editable=await page.evaluate(({route,id})=>route==='documents'?canModifyDoc(db.docs.find(x=>x.id===id)):canEditLog(db.logs.find(x=>x.id===id)),{route,id:r.id});
       assert.equal(editable,false);
       if(route==='documents'){
-        await openPage(page,'docs');const row=page.locator('#docsTable tr',{hasText:r.name});await row.waitFor();
+        await openPage(page,'docs');const row=page.locator('#docsTable tr',{hasText:r.name}).filter({hasText:'Đã khóa'});await row.waitFor();
         assert.equal(await row.locator('button[onclick*="openDoc"]').count(),0);
       }else{
         await openPage(page,'daily');const row=page.locator('#logsTable tr',{hasText:r.work_summary});await row.waitFor();
@@ -132,7 +132,8 @@ module.exports=function(){
     assert.equal(await page.locator('.tmPerm[value="APPROVE"]').isChecked(),false);
     assert.ok(!(await page.evaluate(()=>readPermEditor().access_permissions)).includes('APPROVE'));
     await page.locator('#modal button[onclick*="saveTeamMember"]').click();
-    await page.waitForSelector('#modal.show',{state:'hidden'});
+    await page.waitForFunction(()=>!document.getElementById('modal').classList.contains('show')||/Không lưu được|Nhập |Chọn /.test(document.getElementById('tmMessage')?.textContent||''));
+    assert.equal(await page.locator('#modal.show').count(),0,await page.locator('#tmMessage').textContent());
     const map=expect(await users.gst.api.get('/project-members/my-permissions'),200);
     assert.ok(!map[f.projects.A.id].permissions.includes('APPROVE'));
   });
@@ -150,6 +151,28 @@ module.exports=function(){
     await page.locator('.tmPerm[value="VIEW"]').uncheck();
     assert.deepEqual(await page.evaluate(()=>readPermEditor().access_permissions),[]);
     expect(await users.ks.api.get('/projects/'+f.projects.A.id),403);
+  });
+  uiTest('GD-PQ hết hạn phân công: không hiện công trình, URL/API chi tiết bị chặn',async page=>{
+    const f=await prepare(),r=await record(users,f,'documents');
+    const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+    expect(await users.admin.api.put('/project-members/'+f.members.A.ks.id,{end_date:yesterday}),200);
+    await login(page,'ks');await openPage(page,'projects');
+    await page.waitForFunction(pid=>!db.projects.some(p=>p.id===pid),f.projects.A.id);
+    assert.equal(await page.locator('#projectsTable tr',{hasText:f.projects.A.name}).count(),0);
+    const status=await page.evaluate(async id=>{try{await apiRequest('/documents/'+id);return 200}catch(e){return e.status}},r.id);
+    assert.equal(status,403);
+  });
+  uiTest('GD-PQ thùng rác: Giám đốc không có purge, Admin bấm xóa vĩnh viễn được',async page=>{
+    const f=await prepare(),r=await record(users,f,'documents');
+    const trash=expect(await users.gd.api.del('/documents/'+r.id,{reason:'Thử xóa vĩnh viễn'}),200);
+    await login(page,'gd');await openPage(page,'trash');
+    const gdRow=page.locator('#trashBody tr',{hasText:r.name});await gdRow.waitFor();
+    assert.equal(await gdRow.locator('button[onclick*="purgeTrash"]').count(),0);
+    expect(await users.gd.api.del('/recycle-bin/'+trash.recycle_id),403);
+    await login(page,'admin');await openPage(page,'trash');
+    const adminRow=page.locator('#trashBody tr',{hasText:r.name});await adminRow.waitFor();
+    const response=page.waitForResponse(x=>x.url().endsWith('/recycle-bin/'+trash.recycle_id)&&x.request().method()==='DELETE');
+    await adminRow.locator('button[onclick*="purgeTrash"]').click();assert.equal((await response).status(),200);
   });
   for(const route of ['daily-logs','documents','issues'])uiTest('GD-PQ đang nhập '+route+': thu hồi phân công chặn lưu, giữ nội dung',async page=>{
     const f=await prepare(), r=await record(users,f,route),kind=kinds[route];await login(page,'ks');

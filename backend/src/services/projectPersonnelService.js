@@ -224,13 +224,13 @@ class ProjectPersonnelService {
         SET full_name = COALESCE(NULLIF($1, ''), full_name),
             assignment_title = COALESCE(NULLIF($2, ''), assignment_title),
             certificate = CASE WHEN $3::text IS NULL THEN certificate ELSE NULLIF($3, '') END,
-            bidding_package_id = CASE WHEN $5::text IS NULL THEN bidding_package_id ELSE $5::uuid END,
+            bidding_package_id = CASE WHEN $5::boolean THEN $6::uuid ELSE bidding_package_id END,
             updated_at = NOW()
         WHERE id = $4 AND status = 'ACTIVE'
         RETURNING *
       `, [cleanName(data.full_name), String(data.assignment_title || '').trim(),
           data.certificate === undefined ? null : String(data.certificate), id,
-          data.bidding_package_id === undefined ? null : (data.bidding_package_id || '')])).rows[0];
+          data.bidding_package_id !== undefined, data.bidding_package_id || null])).rows[0];
       if (row) await this.syncMemberTitle(client, row);
       await client.query('COMMIT');
       return row;

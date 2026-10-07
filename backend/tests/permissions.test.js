@@ -247,3 +247,12 @@ test('PQ20: hộp việc không lộ báo cáo/hồ sơ của công trình đã 
   assert.ok(!after.returned.some(r=>r.project_id===fixture.projects.A.id));
   assert.ok(!after.approved.some(r=>r.project_id===fixture.projects.A.id));
 });
+test('PQ21: lưu quyền/chức danh khi không có gói thầu không lỗi UUID; bỏ qua trường giữ gói cũ', async () => {
+  const p='/project-personnel/'+fixture.members.A.gst.personnel_id;
+  expect(await users.admin.api.put(p,{assignment_title:'Giám sát trưởng',bidding_package_id:null}),200);
+  const pkg=expect(await users.admin.api.post('/bidding-packages',{project_id:fixture.projects.A.id,name:'Gói thầu thử'}),201);
+  const selected=expect(await users.admin.api.put(p,{bidding_package_id:pkg.id}),200);
+  assert.equal(selected.bidding_package_id,pkg.id);
+  const unchangedPackage=expect(await users.admin.api.put(p,{certificate:'Chứng chỉ cập nhật'}),200);
+  assert.equal(unchangedPackage.bidding_package_id,pkg.id);
+});
