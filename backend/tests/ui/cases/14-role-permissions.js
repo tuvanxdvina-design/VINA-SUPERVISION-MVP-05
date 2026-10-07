@@ -116,6 +116,8 @@ module.exports=function(){
     assert.equal(await ar.locator('button[onclick*="deleteContent"]').count(),1);
     assert.equal(await br.locator('button[onclick*="deleteContent"]').count(),0);
     assert.equal(await ar.locator('a[onclick*="openServerFile"]').count(),0);
+    const editFiles=await page.evaluate(id=>docFileLinks(db.docs.find(x=>x.id===id),{withDelete:true}),a.id);
+    assert.ok(!editFiles.includes('openServerFile'));assert.ok(editFiles.includes('deleteDocFile'),'Không có DOWNLOAD vẫn được quản lý tệp của bản nháp của mình');
     expect(await users.ks.api.get('/documents/'+a.id+'/files/'+file.id),403);
   });
   uiTest('GD-PQ quản trị bỏ APPROVE của GST: giao diện không tự tích lại khi đổi chức danh',async page=>{
@@ -171,6 +173,11 @@ module.exports=function(){
     expect(await users.gd.api.del('/recycle-bin/'+trash.recycle_id),403);
     await login(page,'admin');await openPage(page,'trash');
     const adminRow=page.locator('#trashBody tr',{hasText:r.name});await adminRow.waitFor();
+    // Mặc định helper để prompt trống: ứng dụng phải chặn, chưa được xóa.
+    await adminRow.locator('button[onclick*="purgeTrash"]').click();
+    assert.ok(expect(await users.admin.api.get('/recycle-bin'),200).some(x=>x.id===trash.recycle_id&&!x.purged_at));
+    page.removeAllListeners('dialog');
+    page.on('dialog',async dialog=>{page.__dialogs.push(dialog.message());await dialog.accept(dialog.type()==='prompt'?'XOA':undefined)});
     const response=page.waitForResponse(x=>x.url().endsWith('/recycle-bin/'+trash.recycle_id)&&x.request().method()==='DELETE');
     await adminRow.locator('button[onclick*="purgeTrash"]').click();assert.equal((await response).status(),200);
   });
