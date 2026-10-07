@@ -28,7 +28,9 @@ Kiểm tra **sự có mặt**, không in giá trị, của JWT_SECRET trong bi�
 
 Thực hiện sau khi điều kiện đồng bộ đã được người vận hành xác nhận. Nếu `backend\.env.bak` đã tồn tại, giữ nguyên và đối chiếu nguồn gốc; không ghi đè bản dự phòng cũ.
 
-Tạo bản sao `.env` với quyền truy cập chỉ dành cho người vận hành. Một script cục bộ sinh 48 byte ngẫu nhiên bằng crypto/RandomNumberGenerator, chuyển thành 96 ký tự hex và thay **duy nhất** dòng JWT_SECRET trong `.env`, giữ các cấu hình khác. Script từ chối nếu thiếu hoặc có nhiều dòng JWT_SECRET; không in khóa, nội dung .env hoặc lỗi chứa bí mật. Nếu ghi tệp thất bại, giữ nguyên bản dự phòng, không tiếp tục khởi động bằng cấu hình chưa xác định.
+Công cụ `rotate` bên dưới **tự tạo** `.env.bak` trước khi ghi khóa, vì vậy không chạy riêng bước chép `.env` sang `.env.bak` trước khi dùng công cụ này. Bảo vệ thư mục chứa `.env` và bản sao bằng quyền truy cập Windows phù hợp. Nếu đã làm bước sao lưu thủ công theo hướng dẫn cũ, giữ bản đó và xác định nguồn gốc trước; không xóa/ghi đè chỉ để công cụ chạy tiếp.
+
+Công cụ cục bộ sinh 48 byte ngẫu nhiên bằng crypto, chuyển thành 96 ký tự hex và thay **duy nhất** dòng JWT_SECRET trong `.env`, giữ các cấu hình khác. Công cụ từ chối nếu thiếu hoặc có nhiều dòng JWT_SECRET; không in khóa, nội dung .env hoặc lỗi chứa bí mật. Nếu ghi tệp thất bại, giữ nguyên bản dự phòng, không tiếp tục khởi động bằng cấu hình chưa xác định.
 
 So sánh lại bằng script chỉ xuất boolean: khóa mới khác khóa dự phòng và khác hai bản tham chiếu. Không đưa bước đọc/ghi bí mật cho mô hình xử lý; mô hình chỉ xem mã script và trạng thái đã che bí mật.
 
