@@ -84,8 +84,7 @@ function refreshPermDefaults(){
  span.textContent='('+defaultsLabel(roleName,title)+')';
  const mode=document.querySelector('input[name="tmPermMode"]:checked')?.value;
  if(mode==='DEFAULT'){const d=defaultPermsFor(roleName,title);document.querySelectorAll('.tmPerm').forEach(c=>c.checked=d.includes(c.value))}
- // Tùy chỉnh + chuyển sang chức danh TVGS trưởng → tự tích Duyệt (Trưởng TVGS quyết định tại công trình)
- else if(mode==='CUSTOM'&&isLeadTitle(title)){['CREATE','EDIT','APPROVE'].forEach(k=>{const c=document.querySelector('.tmPerm[value='+k+']');if(c)c.checked=true})}
+ // Quyền tùy chỉnh là lựa chọn rõ ràng của quản trị; đổi chức danh không tự cấp lại Duyệt.
  const warn=document.getElementById('tmLeadWarn');if(warn)warn.style.display=mode==='CUSTOM'&&isLeadTitle(title)&&!document.querySelector('.tmPerm[value=APPROVE]')?.checked?'':'none';
 }
 function grantApproveNow(){const c=document.querySelector('.tmPerm[value=APPROVE]');if(c){c.disabled=false;c.checked=true}const w=document.getElementById('tmLeadWarn');if(w)w.innerHTML='✔ Đã tích quyền <b>Duyệt</b> — bấm <b>Lưu thay đổi</b> để áp dụng.'}
@@ -94,14 +93,14 @@ function permEditorHtml(r,roleName,titleArg){
  const custom=r&&r.permission_source==='CUSTOM';
  const title=titleArg!==undefined?titleArg:(document.getElementById('tmTitle')?readTitle('tm'):(r?.assignment_title||''));
  const defaults=defaultPermsFor(roleName,title);
- const current=custom&&r.access_permissions&&r.access_permissions.length?r.access_permissions:defaults;
+ const current=custom&&Array.isArray(r?.access_permissions)?r.access_permissions:defaults;
  if(global)return '<fieldset class="perm-box"><legend>Quyền truy cập tại công trình</legend><p class="muted">Tài khoản '+esc(ROLE_LABELS[roleName])+' có toàn quyền trên mọi công trình.</p></fieldset>';
  const disabled=custom?'':' disabled';
  return '<fieldset class="perm-box"><legend>Quyền truy cập tại công trình</legend>'
   +'<label class="inline"><input type="radio" name="tmPermMode" value="DEFAULT"'+(custom?'':' checked')+' onchange="toggleTeamPermMode();refreshPermDefaults()"> Theo mặc định <span class="muted" id="tmDefaultsText" data-role="'+esc(roleName||'')+'">('+esc(defaultsLabel(roleName,title))+')</span></label>'
   +'<label class="inline"><input type="radio" name="tmPermMode" value="CUSTOM"'+(custom?' checked':'')+' onchange="toggleTeamPermMode();refreshPermDefaults()"> Tùy chỉnh cho công trình này</label>'
   +'<div id="tmLeadWarn" class="review-note reject" style="margin:6px 0;display:'+(custom&&isLeadTitle(title)&&!current.includes('APPROVE')?'':'none')+'">⚠ Chức danh là <b>'+esc(title)+'</b> nhưng quyền tùy chỉnh <b>chưa có "Duyệt"</b> → người này chưa phê duyệt được và không có mục "Việc cần duyệt". <button type="button" class="primary" onclick="grantApproveNow()">Cấp quyền Duyệt</button> hoặc chọn "Theo mặc định".</div>'
-  +'<div class="perm-grid">'+PERM_ORDER.map(k=>'<label class="inline"><input type="checkbox" class="tmPerm" value="'+k+'"'+(current.includes(k)?' checked':'')+(k==='APPROVE'?' onchange="refreshPermDefaults()"':'')+(k==='VIEW'?' onclick="return false"':k==='EDIT'?' onchange="if(this.checked){const c=document.querySelector(\'.tmPerm[value=CREATE]\');if(c)c.checked=true}"':k==='CREATE'?' onchange="if(!this.checked){const e=document.querySelector(\'.tmPerm[value=EDIT]\');if(e)e.checked=false}"':'')+disabled+'> '+esc(PERM_LABELS[k])+'</label>').join('')+'</div>'
+  +'<div class="perm-grid">'+PERM_ORDER.map(k=>'<label class="inline"><input type="checkbox" class="tmPerm" value="'+k+'"'+(current.includes(k)?' checked':'')+(k==='APPROVE'?' onchange="refreshPermDefaults()"':'')+(k==='VIEW'?' onclick="if(!this.checked){document.querySelectorAll(\'.tmPerm\').forEach(c=>c.checked=false)}"':k==='EDIT'?' onchange="if(this.checked){const c=document.querySelector(\'.tmPerm[value=CREATE]\');if(c)c.checked=true}"':k==='CREATE'?' onchange="if(!this.checked){const e=document.querySelector(\'.tmPerm[value=EDIT]\');if(e)e.checked=false}"':'')+disabled+'> '+esc(PERM_LABELS[k])+'</label>').join('')+'</div>'
   +'<p class="muted" style="margin:4px 0 0">Xem: xem dữ liệu · Thêm: lập báo cáo ngày/văn bản và sửa bản nháp của mình · Sửa (bao gồm Thêm): sửa, đóng/mở lại bản ghi của người khác · Tải xuống / in: xuất, in, tải tệp · <b>Duyệt</b>: phê duyệt / yêu cầu chỉnh sửa / trình công ty tại công trình này (mặc định có khi chức danh là TVGS trưởng) · <b>Xóa</b>: xóa báo cáo ngày, hồ sơ, báo cáo, văn bản chất lượng, bảng tiến độ (vào Thùng rác, khôi phục được) — mặc định chỉ Admin/Giám đốc, người khác chỉ có khi được tích ở đây.</p>'
   +'<label>Làm việc ở đâu</label><input id="tmScope" maxlength="240" value="'+esc(r?.work_scope||'')+'" placeholder="Ví dụ: Hiện trường, hồ sơ, báo cáo ngày"></fieldset>';
 }
@@ -110,7 +109,7 @@ function readPermEditor(){
  const mode=document.querySelector('input[name="tmPermMode"]:checked')?.value;if(!mode)return {};
  const scope=(document.getElementById('tmScope')?.value||'').trim();
  if(mode==='DEFAULT')return {access_permissions:null,work_scope:scope};
- const list=[...document.querySelectorAll('.tmPerm:checked')].map(x=>x.value);if(!list.includes('VIEW'))list.unshift('VIEW');
+ const list=[...document.querySelectorAll('.tmPerm:checked')].map(x=>x.value);if(list.length&&!list.includes('VIEW'))list.unshift('VIEW');
  return {access_permissions:list,work_scope:scope};
 }
 async function loadPersonnelFiles(personnelId){

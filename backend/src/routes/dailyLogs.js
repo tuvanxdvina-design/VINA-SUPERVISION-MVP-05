@@ -116,7 +116,8 @@ router.get('/', access.query, async (req, res) => {
 // GET /api/daily-logs/:id
 router.get('/:id', async (req, res) => {
   try {
-    const log = await dailyLogService.getDailyLogById(req.params.id);
+    const permissions = await permissionService.forUser(req.user.userId, req.projectId);
+    const log = await dailyLogService.getDailyLogById(req.params.id, { userId: req.user.userId, permissions });
     res.json(log || {});
   } catch (err) {
     res.status(500).json({ error: err.message });

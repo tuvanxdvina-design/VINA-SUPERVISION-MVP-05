@@ -47,6 +47,7 @@ test('PQ02: ENGINEER là GST ở B được duyệt; quyền không lan sang A/C
   }
   const issue = await record(users,fixture,'issues','B','gst');
   expect(await users.ks.api.patch(pathOf('issues',issue),{title:'GST sửa được',expected_row_version:issue.row_version}),200);
+  expect(await users.ks.api.post(pathOf('issues',issue)+'/assign',{assigned_to:users.gst.id}),200);
 });
 test('PQ03: không phân công C bị chặn danh sách, ID, tệp và ghi (3 phân hệ)', async () => {
   const list = expect(await users.ks.api.get('/projects'),200);
@@ -80,9 +81,13 @@ test('PQ05: tài khoản TVGS_LEAD là Kỹ sư/Phó ở B/C không được duy
     for (const action of ['approve','reject','lock']) expect(await users.gst.api.post(pathOf(route,r)+'/'+action,{comment:'Lý do thử'}),403);
     await unchanged(route,sent);
   }
+  const issue=await record(users,fixture,'issues','B','ks');
+  expect(await users.gst.api.post(pathOf('issues',issue)+'/assign',{assigned_to:users.ks.id}),403);
+  await unchanged('issues',issue);
 });
 test('PQ06: nháp báo cáo riêng; GST không đọc ID/ảnh/tệp cho tới khi gửi', async () => {
   const r=await record(users,fixture,'daily-logs'), p=pathOf('daily-logs',r);
+  assert.equal(expect(await users.ks.api.get(p),200).can_edit,true);
   assert.ok(!expect(await users.gst.api.get('/daily-logs?project_id='+r.project_id),200).some(x=>x.id===r.id));
   for (const path of [p,p+'/attachments',p+'/files',p+'/files/00000000-0000-4000-8000-000000000001']) expect(await users.gst.api.get(path),404);
   await submit('daily-logs',r); expect(await users.gst.api.get(p),200);
@@ -92,6 +97,7 @@ test('PQ07: trình công ty chặn GST quyết định; Giám đốc duyệt đ�
     const r=await record(users,fixture,route), p=pathOf(route,r); await submit(route,r);
     expect(await users.gst.api.post(p+'/escalate',{comment:'Cần công ty quyết định'}),200);
     const before=expect(await users.admin.api.get(p),200);
+    assert.equal(before.last_review.action,'ESCALATE');
     for (const action of ['approve','reject']) expect(await users.gst.api.post(p+'/'+action,{comment:'Không được tự quyết'}),409);
     await unchanged(route,before); expect(await users.gd.api.post(p+'/approve',{}),200);
   }
@@ -223,6 +229,7 @@ test('PQ19: LOCKED chặn sửa/thêm tệp ngay cả Admin/Giám đốc; mở l
       assert.ok([403,409].includes(upload.status));
     }
     await unchanged(route,locked);
+    if(route==='daily-logs')assert.equal(expect(await users.admin.api.get(p),200).can_edit,false);
     expect(await users.gst.api.post(p+'/reopen',{reason:'Mở lại để sửa có kiểm soát'}),200);
     const reopened=expect(await users.ks.api.get(p),200);assert.equal(reopened.status,'DRAFT');
     expect(await users.ks.api.patch(p,{name:'Sửa sau mở lại',work_summary:'Sửa sau mở lại',expected_row_version:reopened.row_version}),200);

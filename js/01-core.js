@@ -222,6 +222,8 @@ async function uploadIssueFile(issueId,file){
 }
 function issueFileLinksHtml(files){
  if(!Array.isArray(files)||!files.length)return '<span class="muted">Chưa có tệp</span>';
+ const issue=db.issues.find(x=>x.id===files[0].issueId);
+ if(issue&&!canDownloadIn(issue.projectId))return files.map(f=>'<span class="muted">'+esc(f.file_name)+'</span>').join(', ');
  return files.map(f=>'<a href="#" onclick="openServerFile(\'/issues/'+f.issueId+'/files/'+f.id+'\','+esc(JSON.stringify({name:f.file_name,type:f.file_type}))+',false);return false">'+esc(f.file_name)+'</a> <span class="muted">('+fileSize(f.file_size)+')</span>').join(', ');
 }
 // Đổ danh sách tệp đã tải lên vào khung `boxId` sau khi mở modal (văn bản đã tồn tại trên máy chủ mới có tệp để liệt kê).
@@ -288,9 +290,9 @@ let activeEditVersion=null;
 function captureEditVersion(type,recordId,record){activeEditVersion={type,recordId,version:record?.rowVersion??null}}
 function editVersion(type,recordId,record){return activeEditVersion?.type===type&&activeEditVersion.recordId===recordId?activeEditVersion.version:record?.rowVersion??null}
 function showQueuedConflict(type,recordId){
- const item=(db.sync||[]).find(x=>x.type===type&&x.recordId===recordId&&x.status==='CONFLICT');
+ const item=(db.sync||[]).find(x=>x.type===type&&x.recordId===recordId&&(x.status==='CONFLICT'||(x.status==='PENDING'&&x.lastError&&apiOnline())));
  if(!item)return false;
- alert(item.lastError||'Nội dung đã được người khác cập nhật. Bản nhập được giữ trên thiết bị để đối chiếu.');
+ alert((item.lastError||'Nội dung đã được người khác cập nhật.')+' Nội dung đang nhập và tệp chờ vẫn được giữ trên thiết bị.');
  updateNet();return true;
 }
 function exportConflictDraft(queueId){

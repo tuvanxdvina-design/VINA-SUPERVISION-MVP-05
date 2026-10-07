@@ -16,6 +16,8 @@ const kinds={
   issues:{collection:'issues',mapper:'mapIssueFromApi',input:'#ititle',open:'openIssue',save:'saveQualityDocument',type:'issue',field:'title'}
 };
 async function putLocal(page,route,r,project) {
+  // Đọc chi tiết thực trong phiên đang đăng nhập; không tạo giả can_edit/lịch sử duyệt.
+  r=await page.evaluate(path=>apiRequest(path),'/' + route + '/' + r.id);
   await page.evaluate(({kind,r,project})=>{
     if(!db.projects.some(p=>p.id===project.id))db.projects.push(mapProjectFromApi(project));
     const mapped=window[kind.mapper](r);mapped.serverId=r.id;
@@ -99,7 +101,7 @@ module.exports=function(){
         assert.equal(await row.locator('button[onclick*="openDoc"]').count(),0);
       }else{
         await openPage(page,'daily');const row=page.locator('#logsTable tr',{hasText:r.work_summary});await row.waitFor();
-        assert.equal(await row.locator('button[onclick*="openLog"]').count(),0);
+        assert.equal(await row.locator('button[onclick^="openLog("]').count(),0);
       }
     }
   });
@@ -116,7 +118,40 @@ module.exports=function(){
     assert.equal(await ar.locator('a[onclick*="openServerFile"]').count(),0);
     expect(await users.ks.api.get('/documents/'+a.id+'/files/'+file.id),403);
   });
-  for(const route of ['daily-logs','documents'])uiTest('GD-PQ đang nhập '+route+': thu hồi phân công chặn lưu, giữ nội dung',async page=>{
+  uiTest('GD-PQ quản trị bỏ APPROVE của GST: giao diện không tự tích lại khi đổi chức danh',async page=>{
+    const f=await prepare();await login(page,'admin');
+    await page.evaluate(async({pid,uid})=>{
+      teamRowsByProject[pid]=await apiRequest('/project-personnel/project/'+pid+'/team');
+      const row=teamRowsByProject[pid].find(x=>x.user_id===uid);
+      await openTeamMember(encodeURIComponent(row.key),pid);
+    },{pid:f.projects.A.id,uid:users.gst.id});
+    await page.waitForSelector('#modal.show .tmPerm');
+    await page.locator('input[name="tmPermMode"][value="CUSTOM"]').check();
+    await page.locator('.tmPerm[value="APPROVE"]').uncheck();
+    await page.selectOption('#tmTitle','TVGS trưởng');
+    assert.equal(await page.locator('.tmPerm[value="APPROVE"]').isChecked(),false);
+    assert.ok(!(await page.evaluate(()=>readPermEditor().access_permissions)).includes('APPROVE'));
+    await page.locator('#modal button[onclick*="saveTeamMember"]').click();
+    await page.waitForSelector('#modal.show',{state:'hidden'});
+    const map=expect(await users.gst.api.get('/project-members/my-permissions'),200);
+    assert.ok(!map[f.projects.A.id].permissions.includes('APPROVE'));
+  });
+  uiTest('GD-PQ quyền rỗng: quản trị thấy đúng các ô bỏ chọn, không biến thành mặc định',async page=>{
+    const f=await prepare();expect(await users.admin.api.put('/project-members/'+f.members.A.ks.id,{access_permissions:[]}),200);
+    await login(page,'admin');
+    await page.evaluate(async({pid,uid})=>{
+      teamRowsByProject[pid]=await apiRequest('/project-personnel/project/'+pid+'/team');
+      await openTeamMember(encodeURIComponent(teamRowsByProject[pid].find(x=>x.user_id===uid).key),pid);
+    },{pid:f.projects.A.id,uid:users.ks.id});
+    await page.waitForSelector('#modal.show .tmPerm');
+    assert.equal(await page.locator('.tmPerm:checked').count(),0);
+    assert.deepEqual(await page.evaluate(()=>readPermEditor().access_permissions),[]);
+    await page.locator('.tmPerm[value="VIEW"]').check();
+    await page.locator('.tmPerm[value="VIEW"]').uncheck();
+    assert.deepEqual(await page.evaluate(()=>readPermEditor().access_permissions),[]);
+    expect(await users.ks.api.get('/projects/'+f.projects.A.id),403);
+  });
+  for(const route of ['daily-logs','documents','issues'])uiTest('GD-PQ đang nhập '+route+': thu hồi phân công chặn lưu, giữ nội dung',async page=>{
     const f=await prepare(), r=await record(users,f,route),kind=kinds[route];await login(page,'ks');
     await putLocal(page,route,r,f.projects.A);
     await page.evaluate(({kind,id})=>window[kind.open](id),{kind,id:r.id});await page.waitForSelector('#modal.show '+kind.input);

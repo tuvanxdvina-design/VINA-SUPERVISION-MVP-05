@@ -53,16 +53,19 @@ class DailyLogService {
   }
 
   // GET single daily log
-  async getDailyLogById(id) {
+  async getDailyLogById(id, { userId = null, permissions = { role: '', permissions: [] } } = {}) {
     const result = await pool.query(`
       SELECT dl.*, TO_CHAR(dl.log_date, 'YYYY-MM-DD') AS log_date_text,
              (SELECT COUNT(*)::int FROM attachments a WHERE a.daily_log_id = dl.id) AS photo_count,
+             (SELECT COUNT(*)::int FROM daily_log_files f WHERE f.daily_log_id = dl.id) AS file_count,
+             ${lastReviewSql('daily_logs', 'dl')} AS last_review,
+             (dl.status <> 'LOCKED' AND ($3::boolean OR (dl.status = 'DRAFT' AND dl.created_by = $2 AND $4::boolean))) AS can_edit,
              COALESCE(dl.author_name, u.full_name) as created_by_name, a.full_name as approved_by_name
       FROM daily_logs dl
       LEFT JOIN users u ON dl.created_by = u.id
       LEFT JOIN users a ON dl.approved_by = a.id
       WHERE dl.id = $1
-    `, [id]);
+    `, [id, userId, ['ADMIN', 'DIRECTOR'].includes(permissions.role), permissions.permissions.includes('CREATE')]);
     return result.rows[0];
   }
 
