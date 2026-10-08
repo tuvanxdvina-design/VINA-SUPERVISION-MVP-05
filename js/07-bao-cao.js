@@ -119,14 +119,15 @@ function reportBodyHtml(s,{sections,code,title}={}){
   +reportAlertsHtml(s)
   +(sections?'<h3>VI. Nhận xét, đánh giá của Tư vấn giám sát</h3>'+secs.map(([k,tt],i)=>'<p><b>'+(i+1)+'. '+esc(tt)+':</b></p><p class="pre">'+esc(sections[k]||'—')+'</p>').join(''):'');
 }
-function viewReport(docId){
- const x=db.docs.find(v=>v.id===docId);if(!x)return;const d=x.details||{};
- if(!d.snapshot)return viewDoc(docId); // báo cáo kiểu cũ
+function viewReport(docId,loadedDoc){
+ const x=loadedDoc||db.docs.find(v=>v.id===docId);if(!x)return;const d=x.details||{};
+ if(!d.snapshot)return viewDoc(docId,loadedDoc); // báo cáo kiểu cũ
  const role=roleToken(qualityAuthUser()?.role_name||'');const lead=['ADMIN','DIRECTOR','TVGS_LEAD'].includes(role);
  const flow=[x.status==='DRAFT'&&canModifyDoc(x)?['submit','Gửi duyệt']:null,x.status==='SUBMITTED'&&docCanDecide(x)?['approve','Duyệt']:null,x.status==='SUBMITTED'&&docCanDecide(x)?['reject','Trả lại']:null,x.status==='APPROVED'&&docCanDecide(x)?['lock','Khóa']:null].filter(Boolean);
  setTimeout(()=>loadReviewHistory('documents',x.id),0);
  openModal(x.name,reviewBlockHtml(x)+'<div class="card">'+reportBodyHtml(d.snapshot,{sections:d.sections||{}})+'<hr><p class="muted">Trạng thái: '+docStatusBadge(x.status)+' · Người lập: '+esc(x.createdBy)+' · Số liệu chốt lúc '+esc(fmt(d.snapshot.generated_at))+'</p>'+((x.files||[]).length?'<h4>Tài liệu đính kèm</h4>'+docFileLinks(x):'')+'</div><div class="toolbar"><button class="primary" onclick="printReport(\''+x.id+'\')">In / Xuất PDF</button>'+(canModifyDoc(x)&&x.status==='DRAFT'?'<button onclick="closeModal();openReport(\''+x.id+'\')">Sửa</button>':'')+flow.map(([a,t])=>'<button onclick="reportWorkflow(\''+x.id+'\',\''+a+'\')">'+t+'</button>').join('')+deleteBtn('doc',x.serverId,x.projectId,(x.code||'')+' '+(x.name||''))+'</div>');
  document.querySelector('#modal .modalbox')?.classList.add('wide');
+ if(loadedDoc)document.querySelector('#mbody .toolbar')?.remove();
 }
 function printReport(docId){
  const x=db.docs.find(v=>v.id===docId);if(!x?.details?.snapshot)return;const d=x.details;const w=window.open('','_blank');if(!w)return alert('Trình duyệt chặn cửa sổ in. Hãy cho phép cửa sổ bật lên.');

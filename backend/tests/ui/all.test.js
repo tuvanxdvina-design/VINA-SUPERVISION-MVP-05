@@ -25,3 +25,4 @@ require('./cases/11-pwa')();
 require('./cases/12-offline-files')();
 require('./cases/13-edit-conflicts')();
 require('./cases/14-role-permissions')();
+require('./cases/15-review-and-multi-project')();
