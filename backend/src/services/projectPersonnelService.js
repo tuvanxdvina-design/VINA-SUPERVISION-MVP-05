@@ -7,9 +7,10 @@ function cleanName(value) {
   return String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim();
 }
 
-function httpError(status, message) {
+function httpError(status, message, code) {
   const error = new Error(message);
   error.status = status;
+  if (code) error.code = code;
   return error;
 }
 
@@ -203,9 +204,11 @@ class ProjectPersonnelService {
           RETURNING *
         `, [data.id || null, data.project_id, fullName, title, data.certificate || '', data.created_by, data.user_id || null, data.bidding_package_id || null])).rows[0];
       }
+      const replaced = await this.ensureSingleLead(client, row.project_id, row.assignment_title,
+        { personnelId: row.id, userId: row.user_id, replaceLead: data.replace_lead === true });
       await this.syncMemberTitle(client, row);
       await client.query('COMMIT');
-      return { row, created: !existing };
+      return { row, created: !existing, replaced };
     } catch (error) {
       await client.query('ROLLBACK');
       if (error.code === '23505') throw httpError(409, 'Đã có nhân sự cùng họ tên trong công trình này');
@@ -231,9 +234,11 @@ class ProjectPersonnelService {
       `, [cleanName(data.full_name), String(data.assignment_title || '').trim(),
           data.certificate === undefined ? null : String(data.certificate), id,
           data.bidding_package_id !== undefined, data.bidding_package_id || null])).rows[0];
+      const replaced = row ? await this.ensureSingleLead(client, row.project_id, row.assignment_title,
+        { personnelId: row.id, userId: row.user_id, replaceLead: data.replace_lead === true }) : [];
       if (row) await this.syncMemberTitle(client, row);
       await client.query('COMMIT');
-      return row;
+      return { row, replaced };
     } catch (error) {
       await client.query('ROLLBACK');
       if (error.code === '23505') throw httpError(409, 'Đã có nhân sự cùng họ tên trong công trình này');
@@ -241,6 +246,35 @@ class ProjectPersonnelService {
     } finally {
       client.release();
     }
+  }
+
+  // Mỗi công trình chỉ một TVGS trưởng đang hiệu lực. Gọi trong transaction, SAU khi ghi dòng có chức danh `title`.
+  // Có TVGS trưởng khác: replaceLead=true → kết thúc phân công người đó (chuyển giao); ngược lại 409 LEAD_EXISTS.
+  // ponytail: nhận diện theo chức danh (isLeadTitle); tài khoản TVGS_LEAD chưa nhập chức danh (dữ liệu cũ) không tính.
+  async ensureSingleLead(client, projectId, title, { personnelId = null, userId = null, replaceLead = false } = {}) {
+    if (!permissionService.isLeadTitle(title)) return [];
+    await client.query('SELECT id FROM projects WHERE id = $1 FOR UPDATE', [projectId]);
+    const others = (await client.query(`
+      SELECT pp.id AS personnel_id, pp.user_id, pp.full_name, pp.assignment_title
+      FROM project_personnel pp
+      WHERE pp.project_id = $1 AND pp.status = 'ACTIVE' AND pp.id IS DISTINCT FROM $2::uuid
+        AND ($3::uuid IS NULL OR pp.user_id IS DISTINCT FROM $3::uuid)
+      UNION ALL
+      SELECT NULL, pm.user_id, u.full_name, pm.assignment_title
+      FROM project_members pm JOIN users u ON u.id = pm.user_id JOIN roles r ON r.id = u.role_id
+      WHERE pm.project_id = $1 AND pm.status = 'ACTIVE' AND pm.user_id IS DISTINCT FROM $3::uuid
+        AND r.name NOT IN ('ADMIN', 'DIRECTOR', 'MANAGER')
+        AND NOT EXISTS (SELECT 1 FROM project_personnel pp WHERE pp.project_id = pm.project_id AND pp.user_id = pm.user_id AND pp.status = 'ACTIVE')
+    `, [projectId, personnelId, userId])).rows.filter(r => permissionService.isLeadTitle(r.assignment_title));
+    if (!others.length) return [];
+    const names = others.map(r => r.full_name).join(', ');
+    if (!replaceLead) throw httpError(409, `Công trình đã có TVGS trưởng: ${names}. Mỗi công trình chỉ có một TVGS trưởng.`, 'LEAD_EXISTS');
+    for (const r of others) {
+      if (r.personnel_id) await client.query(`UPDATE project_personnel SET status = 'INACTIVE', updated_at = NOW() WHERE id = $1`, [r.personnel_id]);
+      if (r.user_id) await client.query(`UPDATE project_members SET status = 'INACTIVE', end_date = CURRENT_DATE, updated_at = NOW()
+                                         WHERE project_id = $1 AND user_id = $2 AND status = 'ACTIVE'`, [projectId, r.user_id]);
+    }
+    return others;
   }
 
   // Giữ chức danh + gói thầu ở phân công tài khoản khớp với hồ sơ nhân sự (một nguồn sự thật).
@@ -340,6 +374,7 @@ class ProjectPersonnelService {
           VALUES ($1, $2, $3, $4, 'ACTIVE', $5, $6::uuid) RETURNING *
         `, [project_id, cleanName(user.full_name), title, user_id, actorId, bidding_package_id || null])).rows[0];
       }
+      await this.ensureSingleLead(client, project_id, personnel.assignment_title, { personnelId: personnel.id, userId: user_id });
       const member = await this.upsertMember(client, project_id, user, personnel.assignment_title, actorId, personnel.bidding_package_id);
       await this.saveAccess(client, member.id, access_permissions, work_scope);
       await client.query('COMMIT');

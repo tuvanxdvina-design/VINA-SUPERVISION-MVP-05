@@ -256,3 +256,16 @@ test('PQ21: lưu quyền/chức danh khi không có gói thầu không lỗi UUI
   const unchangedPackage=expect(await users.admin.api.put(p,{certificate:'Chứng chỉ cập nhật'}),200);
   assert.equal(unchangedPackage.bidding_package_id,pkg.id);
 });
+test('PQ22: mỗi công trình một TVGS trưởng; chuyển giao kết thúc phân công người cũ trong một lần', async () => {
+  const A=fixture.projects.A.id, ks=fixture.members.A.ks, p='/project-personnel/'+ks.personnel_id;
+  assert.equal(expect(await users.admin.api.put(p,{assignment_title:'TVGS trưởng'}),409).code,'LEAD_EXISTS');
+  expect(await users.admin.api.put('/project-members/'+ks.id,{assignment_title:'TVGS trưởng'}),409);
+  expect(await users.admin.api.post('/project-personnel',{project_id:A,full_name:'GST thứ hai PQ22',assignment_title:'Trưởng TVGS'}),409);
+  expect(await users.admin.api.post('/project-personnel',{project_id:A,full_name:'Phó PQ22',assignment_title:'Phó TVGS trưởng'}),201);
+  assert.ok(!expect(await users.ks.api.get('/project-members/my-permissions'),200)[A].permissions.includes('APPROVE'),'bị chặn thì không đổi gì');
+  expect(await users.admin.api.put(p,{assignment_title:'TVGS trưởng',replace_lead:true}),200);
+  assert.ok(expect(await users.ks.api.get('/project-members/my-permissions'),200)[A].permissions.includes('APPROVE'));
+  assert.equal(expect(await users.gst.api.get('/project-members/my-permissions'),200)[A],undefined,'GST cũ hết phân công tại A');
+  const team=expect(await users.admin.api.get('/project-personnel/project/'+A+'/team'),200);
+  assert.deepEqual(team.filter(x=>/^(TVGS trưởng|Giám sát trưởng|Trưởng TVGS)$/.test(x.assignment_title)).map(x=>x.user_id),[users.ks.id]);
+});

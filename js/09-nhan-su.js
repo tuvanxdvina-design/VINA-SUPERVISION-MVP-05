@@ -214,8 +214,15 @@ async function saveTeamMember(encodedKey,pid){
   {
    const body={project_id:pid,full_name:name,assignment_title:title,certificate:cert,bidding_package_id:packageId||null};
    if(r&&!r.personnel_id&&r.user_id)body.user_id=r.user_id;
-   const row=r?.personnel_id?await apiRequest('/project-personnel/'+encodeURIComponent(r.personnel_id),{method:'PUT',body:JSON.stringify(body)})
-            :await apiRequest('/project-personnel',{method:'POST',body:JSON.stringify(body)});
+   const send=b=>r?.personnel_id?apiRequest('/project-personnel/'+encodeURIComponent(r.personnel_id),{method:'PUT',body:JSON.stringify(b)})
+            :apiRequest('/project-personnel',{method:'POST',body:JSON.stringify(b)});
+   let row;
+   try{row=await send(body)}
+   catch(error){
+    // Mỗi công trình một TVGS trưởng: hỏi chuyển giao — kết thúc phân công người cũ và lưu người này trong cùng một lần.
+    if(error.code!=='LEAD_EXISTS'||!confirm(error.message+'\n\nChuyển giao: kết thúc phân công của TVGS trưởng hiện tại và lưu "'+name+'" làm TVGS trưởng?'))throw error;
+    row=await send({...body,replace_lead:true});
+   }
    personnelId=row.id;
   }
   if(certFiles.length&&personnelId){
