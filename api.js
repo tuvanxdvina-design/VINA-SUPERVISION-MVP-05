@@ -262,7 +262,7 @@ async function syncPendingDocuments(){
         delete item.lastError;
       }catch(error){
         item.lastError=error.message;item.lastErrorCode=error.code||'';
-        if(error.status===409)item.status='CONFLICT';
+        if([400,409,422].includes(error.status))item.status='CONFLICT';
       }finally{delete item.sending}
     }
     db.sync=db.sync.filter(x=>x.status!=='SYNCED');save();
@@ -446,7 +446,7 @@ async function syncPendingProjects() {
         item.lastAttemptAt = new Date().toISOString();
         // 400/409: máy chủ từ chối vĩnh viễn (trùng mã/số hợp đồng, dữ liệu sai) — không thử lại mãi,
         // đánh dấu để người dùng sửa; công trình vẫn được giữ trên thiết bị.
-        if (error.status === 409 || error.status === 400) item.status = 'CONFLICT';
+        if ([400,409,422].includes(error.status)) item.status = 'CONFLICT';
         console.warn('VINA-SUPERVISION: Không đồng bộ được công trình', item.recordId, error.message);
       } finally { delete item.sending; }
     }
@@ -622,7 +622,7 @@ async function syncPendingDailyLogs() {
 
       } catch (error) {
         // 409 = trùng ngày + ca trên máy chủ: không thử lại mãi, đánh dấu để người dùng đổi ca.
-        item.status = error.status === 409 ? 'CONFLICT' : 'PENDING';
+        item.status = [400,409,422].includes(error.status) ? 'CONFLICT' : 'PENDING';
         item.lastError = error.message;
         item.lastErrorCode = error.code || '';
         if (error.status === 409) item.status = 'CONFLICT';
@@ -731,7 +731,7 @@ async function syncPendingIssues() {
       } catch (error) {
         item.lastError = error.message;
         item.lastErrorCode = error.code || '';
-        if (error.status === 409) item.status = 'CONFLICT';
+        if ([400,409,422].includes(error.status)) item.status = 'CONFLICT';
         item.lastAttemptAt = new Date().toISOString();
       } finally { delete item.sending; }
     }

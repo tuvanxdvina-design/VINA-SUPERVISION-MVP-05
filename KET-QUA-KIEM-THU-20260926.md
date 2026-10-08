@@ -172,3 +172,6 @@ Ba lỗi của bộ kiểm thử phát hiện trong đợt này (đã sửa, kh�
 - Chưa có CI hoặc commit/PR mới cho bản sửa cục bộ này. Nghiệm thu thao tác bằng tay trên phiên vận hành vẫn cần kết quả riêng.
 
 Sau triển khai bản 2026-10-07.2-mvp05: chạy lại GD-B3/GD-C3 6/6 đạt trên DB thử riêng. Health/API vận hành và byte tệp/ảnh đạt; .env/container/volume giữ nguyên. Chi tiết runtime-logs/NGHIEM-THU-MVP05-20261007.md.
+# Việc 5 — kiểm thử Windows 08/10/2026
+
+Trên DB thử riêng: hồi quy API/DB 46/46, xung đột 6/6, phân quyền 22/22, jsUnits 6/6; fail/cancelled/skipped/todo đều 0. UI lượt đầu và phiên bản trình bày cuối cùng đều 70/70. Ca GD-V5 xác minh lỗi lần gửi đầu khi vừa online giữ bản nhập, thử lại phát hiện EDIT_CONFLICT, so sánh hai bản và reload giữ bản nhập; CREATE trùng ngày/ca sửa lại hoặc bỏ không GET bản chưa có. Nghiệm thu Android bản vận hành còn chờ người dùng; không suy ra đạt từ test tự động.
