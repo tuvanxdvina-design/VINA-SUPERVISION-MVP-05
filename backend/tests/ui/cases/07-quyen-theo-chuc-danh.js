@@ -2,7 +2,7 @@
 // Đây là bản sao phía client của permissionService.js (defaultPermsFor / LEAD_DEFAULT_PERMS):
 // ca này đỏ nếu bản sao lệch khỏi quy tắc.
 const assert = require('node:assert/strict');
-const { uiTest, loginViaApi, openPage } = require('../helpers');
+const { uiTest, loginViaApi, openPage, tokenOf, projectIdByContract } = require('../helpers');
 
 // Mã quyền đang được tích trong modal nhân sự.
 const quyenDangTich = (page) => page.$$eval('.tmPerm', els => els.filter(e => e.checked).map(e => e.value));
@@ -11,6 +11,10 @@ module.exports = function () {
   uiTest('GD-11 quyền mặc định đổi theo chức danh, không bao giờ mặc định có Xóa', async (page) => {
     await loginViaApi(page, 'admin');
     await openPage(page, 'people');
+    // Không phụ thuộc công trình được chọn từ các thao tác/đồng bộ trước đó.
+    const pid = await projectIdByContract(await tokenOf('admin'), '001');
+    await page.locator('#directoryProject option[value="' + pid + '"]').waitFor({ state: 'attached' });
+    await page.selectOption('#directoryProject', pid);
     await page.waitForFunction(() => (document.getElementById('people')?.innerText || '').includes('Nguyễn Thành B'));
 
     // Phải chọn người ĐÃ liên kết tài khoản: khung "Quyền truy cập tại công trình" chỉ hiện khi có tài khoản.

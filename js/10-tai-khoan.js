@@ -68,7 +68,9 @@ function onTeamAccountChange(){
  if(!modeWrap||!detail||!box)return;
  if(!type){modeWrap.innerHTML='';detail.innerHTML='<p class="muted">Nhân sự không có tài khoản vẫn nằm trong danh sách tổ TVGS nhưng không đăng nhập được.</p>';box.innerHTML='';return}
  const prev=document.getElementById('tmPrevUser')?.value||'';
- const linked=new Set(Object.values(teamRowsByProject).flat().filter(x=>x.account_status==='LINKED'&&x.user_id!==prev).map(x=>x.user_id));
+ const projectId=document.getElementById('tmProjectId')?.value||'';
+ // Một tài khoản được phân công ở nhiều công trình; chỉ chặn gắn trùng trong công trình đang sửa.
+ const linked=new Set((teamRowsByProject[projectId]||[]).filter(x=>x.account_status==='LINKED'&&x.user_id!==prev).map(x=>x.user_id));
  const existing=assignmentUsers.filter(u=>u.role_name===type&&u.is_active!==false);
  // Người chưa có tài khoản → mặc định TẠO MỚI. Trước đây mặc định "Dùng tài khoản có sẵn" và chọn sẵn
  // tài khoản đầu danh sách (của người khác) → bấm Lưu là gắn nhầm tài khoản.

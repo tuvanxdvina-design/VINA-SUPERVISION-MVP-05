@@ -175,7 +175,7 @@ async function openTeamMember(encodedKey,pid){
  }else{
   account='<fieldset class="perm-box"><legend>Tài khoản đăng nhập</legend>'+(r?.account_status==='LINKED_NO_ACCESS'?'<p class="muted">Tài khoản <b>'+esc(r.username)+'</b> đã bị thu hồi quyền tại công trình. Chọn lại để cấp lại.</p>':'')
    +'<div class="row"><div><label>Loại tài khoản</label><select id="tmAccType" onchange="onTeamAccountChange()"><option value="">— Không có tài khoản —</option>'+ACCOUNT_TYPES.filter(t=>t!=='ADMIN'||roleToken(qualityAuthUser()?.role_name||'')==='ADMIN').map(t=>'<option value="'+t+'"'+(r?.role_name===t&&r?.user_id?' selected':'')+'>'+esc(ROLE_LABELS[t])+'</option>').join('')+'</select></div><div id="tmAccModeWrap"></div></div><div id="tmAccDetail"></div>'
-   +'<input type="hidden" id="tmPrevUser" value="'+esc(r?.user_id||'')+'"></fieldset><div id="tmPermWrap"></div>';
+   +'<input type="hidden" id="tmPrevUser" value="'+esc(r?.user_id||'')+'"><input type="hidden" id="tmProjectId" value="'+esc(pid)+'"></fieldset><div id="tmPermWrap"></div>';
  }
  const actions='<div class="toolbar"><button class="primary" onclick="saveTeamMember(\''+encodedKey+'\',\''+pid+'\')">Lưu thay đổi</button>'
   +(r?'<button class="danger" onclick="removeTeamMember(\''+encodedKey+'\',\''+pid+'\')">Rút khỏi công trình</button>':'')+'</div><div id="tmMessage" class="muted"></div>';

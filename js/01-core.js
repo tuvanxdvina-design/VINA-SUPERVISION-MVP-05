@@ -77,10 +77,10 @@ function logActionsHtml(x){
  if(x.serverId)b.push(deleteBtn('log',x.serverId,x.projectId,'Báo cáo ngày '+progressDate(x.date)+' — '+shiftLabel(x.shift)));
  return b.join(' ');
 }
-async function showLogFiles(logId){
- const l=db.logs.find(v=>v.id===logId);if(!l?.serverId)return;
+async function showLogFiles(logId,loadedLog){
+ const l=loadedLog||db.logs.find(v=>v.id===logId);if(!l?.serverId)return;
  try{const files=await apiRequest('/daily-logs/'+encodeURIComponent(l.serverId)+'/files');
-  openModal('Tệp kèm báo cáo ngày '+progressDate(l.date)+' — '+shiftLabel(l.shift),'<div class="card">'+(files.length?'<ul>'+files.map(f=>'<li><a href="#" onclick="openServerFile(\'/daily-logs/'+l.serverId+'/files/'+f.id+'\','+esc(JSON.stringify({name:f.file_name,type:f.file_type}))+',false);return false">'+esc(f.file_name)+'</a> <span class="muted">('+fileSize(f.file_size)+')</span></li>').join('')+'</ul>':'<p class="muted">Không có tài liệu.</p>')+(l.photoCount?'<button onclick="showLogPhotos(\''+l.id+'\')">Xem '+l.photoCount+' ảnh hiện trường</button>':'')+'</div>')}
+  openModal('Tệp kèm báo cáo ngày '+progressDate(l.date)+' — '+shiftLabel(l.shift),'<div class="card">'+(files.length?'<ul>'+files.map(f=>'<li><a href="#" onclick="openServerFile(\'/daily-logs/'+l.serverId+'/files/'+f.id+'\','+esc(JSON.stringify({name:f.file_name,type:f.file_type}))+',false);return false">'+esc(f.file_name)+'</a> <span class="muted">('+fileSize(f.file_size)+')</span></li>').join('')+'</ul>':'<p class="muted">Không có tài liệu.</p>')+(l.photoCount?'<button onclick="'+(loadedLog?'showReviewPhotos()':'showLogPhotos(\''+l.id+'\')')+'">Xem '+l.photoCount+' ảnh hiện trường</button>':'')+'</div>')}
  catch(error){alert('Không tải được danh sách tệp: '+error.message)}
 }
 async function logAction(logId,action,silent){
@@ -321,8 +321,8 @@ async function discardConflictDraft(queueId){
 }
 function renderHeaderUser(){const el=document.getElementById('hdrUser');if(!el)return;const u=typeof getAuthUser==='function'?getAuthUser():null;if(!u){el.textContent='';return}const roleLabel=(typeof ROLE_LABELS!=='undefined'&&ROLE_LABELS[u.role_name])||db.role||u.role_name||'';el.textContent=(u.full_name||u.username||'')+(roleLabel?' · '+roleLabel:'')}
 
-async function showLogPhotos(logId){
-  const log=db.logs.find(x=>x.id===logId);
+async function showLogPhotos(logId,loadedLog){
+  const log=loadedLog||db.logs.find(x=>x.id===logId);
   if(!log)return;
   openModal('Ảnh hiện trường','<p id="photoGallery" class="muted">Đang tải ảnh...</p>');
   let photos=(log.photos||[]).filter(x=>x.data);
@@ -335,7 +335,7 @@ async function showLogPhotos(logId){
         const image=await apiRequest('/daily-logs/'+encodeURIComponent(serverId)+'/attachments/'+encodeURIComponent(file.id));
         photos.push({name:file.file_name,data:image.data_url});
       }
-    }catch(error){console.warn('Không tải được ảnh từ máy chủ:',error.message)}
+    }catch(error){const gallery=document.getElementById('photoGallery');if(gallery)gallery.textContent='Không tải được ảnh: '+error.message;return}
   }
   const gallery=document.getElementById('photoGallery');
   if(gallery)gallery.innerHTML=photos.length

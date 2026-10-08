@@ -36,21 +36,34 @@ async function loadReviewHistory(kind,id){
  if(!rows.length){el.innerHTML='<li class="muted">Chưa gửi duyệt lần nào.</li>';return}
  el.innerHTML=rows.map(n=>'<li><b>'+esc(REVIEW_ACTION[n.action]||n.action)+'</b> — '+esc(n.actor_name||'')+' · '+esc(fmt(n.created_at))+(n.comment?'<div class="pre" style="white-space:pre-wrap;color:#475467">'+esc(n.comment)+'</div>':'')+'</li>').join('');
 }
-function reviewItem(kind,id){
+let reviewDecisionContext=null;
+let reviewDecisionLoad=0;
+function reviewItem(kind,id,loaded){
  const fromInbox=[...(inboxData?.to_review||[]),...(inboxData?.escalated||[]),...(inboxData?.monitor||[])].find(v=>v.kind===kind&&v.id===id);
  const lastOf=local=>fromInbox?.last_action?{action:fromInbox.last_action,comment:fromInbox.last_comment,by:fromInbox.last_by,at:fromInbox.last_at}:(local?.lastReview||null);
- if(kind==='documents'){const d=(db.docs||[]).find(v=>v.id===id);return {title:d?((d.code||'')+' — '+(d.name||'')):((fromInbox?.code||'')+' — '+(fromInbox?.title||'')),by:d?.createdBy||fromInbox?.created_by_name||'',at:d?.submittedAt||fromInbox?.submitted_at||'',local:d,projectId:d?.projectId||fromInbox?.project_id,last:lastOf(d),extra:''}}
- const l=(db.logs||[]).find(v=>v.serverId===id);const p=(db.projects||[]).find(v=>v.id===(l?.projectId||fromInbox?.project_id))||{};
+ if(kind==='documents'){const d=loaded||(db.docs||[]).find(v=>v.id===id);return {title:d?((d.code||'')+' — '+(d.name||'')):((fromInbox?.code||'')+' — '+(fromInbox?.title||'')),by:d?.createdBy||fromInbox?.created_by_name||'',at:d?.submittedAt||fromInbox?.submitted_at||'',local:d,projectId:d?.projectId||fromInbox?.project_id,last:loaded?d.lastReview:lastOf(d),extra:''}}
+ const l=loaded||(db.logs||[]).find(v=>v.serverId===id);const p=(db.projects||[]).find(v=>v.id===(l?.projectId||fromInbox?.project_id))||{};
  const date=l?.date||fromInbox?.log_date||'',shift=l?.shift||fromInbox?.shift||'';
- return {title:'Báo cáo ngày '+progressDate(date)+' — '+shiftLabel(shift)+(p.name?' · '+p.name:''),by:l?.createdBy||fromInbox?.created_by_name||'',at:l?.submittedAt||fromInbox?.submitted_at||'',local:l,projectId:l?.projectId||fromInbox?.project_id,last:lastOf(l),
-  extra:l?'<p>'+(l.contractorUnit?'<b>Đơn vị tc:</b> '+esc(l.contractorUnit)+' · ':'')+(l.itemCategory?'<b>Hạng mục:</b> '+esc(l.itemCategory):'')+'</p><p><b>Công việc:</b> '+esc(l.work||'')+'</p><p class="muted">Thời tiết: '+esc(l.weather||'—')+' · Cbkt: '+Number(l.technicalStaffCount||0)+' · Nhân lực: '+resourceSummary(l.workerItems,l.workers)+' · Máy: '+resourceSummary(l.machineItems,l.machines)+(l.note?' · Ghi chú: '+esc(l.note):'')+'</p>'+(l.recommendation?'<p><b>Kiến nghị:</b> '+esc(l.recommendation)+'</p>':'')+((l.fileCount||l.photoCount)?'<button type="button" onclick="showLogFiles(\''+l.id+'\')">Xem tệp/ảnh ('+((l.fileCount||0)+(l.photoCount||0))+')</button>':''):'<p class="muted">'+esc(fromInbox?.title||'')+'</p>'};
+ return {title:'Báo cáo ngày '+progressDate(date)+' — '+shiftLabel(shift)+(p.name?' · '+p.name:''),by:l?.createdBy||fromInbox?.created_by_name||'',at:l?.submittedAt||fromInbox?.submitted_at||'',local:l,projectId:l?.projectId||fromInbox?.project_id,last:loaded?l.lastReview:lastOf(l),
+  extra:l?'<p>'+(l.contractorUnit?'<b>Đơn vị tc:</b> '+esc(l.contractorUnit)+' · ':'')+(l.itemCategory?'<b>Hạng mục:</b> '+esc(l.itemCategory):'')+'</p><p><b>Công việc:</b> '+esc(l.work||'')+'</p><p class="muted">Thời tiết: '+esc(l.weather||'—')+' · Cbkt: '+Number(l.technicalStaffCount||0)+' · Nhân lực: '+resourceSummary(l.workerItems,l.workers)+' · Máy: '+resourceSummary(l.machineItems,l.machines)+(l.note?' · Ghi chú: '+esc(l.note):'')+'</p>'+(l.recommendation?'<p><b>Kiến nghị:</b> '+esc(l.recommendation)+'</p>':'')+((l.fileCount||l.photoCount)?'<button type="button" onclick="showReviewLogFiles()">Xem tệp/ảnh ('+((l.fileCount||0)+(l.photoCount||0))+')</button>':''):'<p class="muted">'+esc(fromInbox?.title||'')+'</p>'};
 }
-function openReviewDecision(kind,id,preset){
+async function openReviewDecision(kind,id,preset){
  if(!apiOnline())return alert('Cần kết nối mạng để duyệt.');
- const it=reviewItem(kind,id);const k=JSON.stringify(kind).replace(/"/g,'&quot;'),i=JSON.stringify(id).replace(/"/g,'&quot;');
- const viewBtn=kind==='documents'&&it.local?'<button type="button" onclick="viewDoc('+i+')">Xem toàn văn</button>':'';
+ if(!['documents','daily_logs'].includes(kind))return;
+ const load=++reviewDecisionLoad,token=getAuthToken();reviewDecisionContext=null;
+ openModal('Đang tải nội dung cần duyệt','<p id="rvLoading" class="muted">Đang tải bản hiện tại từ máy chủ...</p>');
+ const loading=document.getElementById('rvLoading');
+ let record;
+ try{record=await apiRequest('/'+(kind==='documents'?'documents':'daily-logs')+'/'+encodeURIComponent(id))}
+ catch(error){if(load===reviewDecisionLoad&&loading?.isConnected&&document.getElementById('modal')?.classList.contains('show'))loading.textContent='Không tải được nội dung; chưa thể duyệt. '+error.message;return}
+ if(load!==reviewDecisionLoad||token!==getAuthToken()||!loading?.isConnected||!document.getElementById('modal')?.classList.contains('show'))return;
+ if(record.id!==id||record.status!=='SUBMITTED'){loading.textContent='Bản này không còn chờ duyệt. Hãy tải lại danh sách.';void loadInbox();return}
+ const loaded=kind==='documents'?mapDocumentFromApi(record):{...mapDailyLogFromApi(record),serverId:record.id};
+ const it=reviewItem(kind,id,loaded);const k=JSON.stringify(kind).replace(/"/g,'&quot;'),i=JSON.stringify(id).replace(/"/g,'&quot;');
+ const viewBtn=kind==='documents'?'<button type="button" onclick="viewReviewDocument()">Xem toàn văn</button>':'';
  const company=canManageAssignments();const escalated=it.last?.action==='ESCALATE';
- if(escalated&&!company)return alert('Bản này đã trình công ty — chờ Giám đốc/Admin quyết định.');
+ if(escalated&&!company){loading.textContent='Bản này đã trình công ty — chờ Giám đốc/Admin quyết định.';return}
+ reviewDecisionContext={kind,id,record:loaded};
  const escNote=escalated?'<div class="review-note"><b>Trưởng TVGS trình công ty</b> — '+esc(it.last.by||'')+' · '+esc(fmt(it.last.at))+'<br>'+esc(it.last.comment||'')+'</div>':'';
  openModal(company?'Quyết định của công ty':'Xem xét và phê duyệt',escNote+'<div class="card"><p><b>'+esc(it.title)+'</b></p><p class="muted">Người lập: '+esc(it.by||'—')+(it.at?' · Gửi duyệt lúc '+esc(fmt(it.at)):'')+'</p>'+it.extra+viewBtn+'</div>'
   +'<label for="rvComment">'+(company?'Ý kiến của Giám đốc/công ty':'Ý kiến của Trưởng TVGS')+'</label><textarea id="rvComment" rows="5" maxlength="4000" placeholder="Phê duyệt: ý kiến không bắt buộc.\nYêu cầu chỉnh sửa, bổ sung: BẮT BUỘC ghi rõ mục cần sửa, số liệu sai, tài liệu cần bổ sung...'+(company?'':'\nTrình công ty (việc vượt thẩm quyền): BẮT BUỘC ghi nội dung cần công ty quyết định.')+'"></textarea>'
@@ -58,7 +71,11 @@ function openReviewDecision(kind,id,preset){
   +(company?'':'<button onclick="submitReviewDecision('+k+','+i+',\'escalate\')" title="Việc vượt thẩm quyền của Trưởng TVGS">⇪ Trình công ty</button>')+'</div><div id="rvMsg" class="muted"></div>');
  if(preset==='reject')setTimeout(()=>document.getElementById('rvComment')?.focus(),50);
 }
+function showReviewLogFiles(){const ctx=reviewDecisionContext;if(ctx?.kind==='daily_logs')return showLogFiles(ctx.id,ctx.record)}
+function showReviewPhotos(){const ctx=reviewDecisionContext;if(ctx?.kind==='daily_logs')return showLogPhotos(ctx.id,ctx.record)}
+function viewReviewDocument(){const ctx=reviewDecisionContext;if(ctx?.kind==='documents')return viewDoc(ctx.id,ctx.record)}
 async function submitReviewDecision(kind,id,action){
+ if(!document.getElementById('rvComment')||reviewDecisionContext?.kind!==kind||reviewDecisionContext.id!==id)return;
  const comment=(document.getElementById('rvComment')?.value||'').trim();const msg=document.getElementById('rvMsg');const say=t=>{if(msg)msg.textContent=t};
  if(action==='reject'&&comment.length<3){say('Nhập nội dung yêu cầu chỉnh sửa, bổ sung để người lập biết cần sửa gì.');document.getElementById('rvComment')?.focus();return}
  if(action==='escalate'&&comment.length<3){say('Nhập nội dung cần công ty quyết định (vì sao vượt thẩm quyền).');document.getElementById('rvComment')?.focus();return}

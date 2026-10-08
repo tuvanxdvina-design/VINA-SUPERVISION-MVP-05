@@ -163,3 +163,12 @@ Ba lỗi của bộ kiểm thử phát hiện trong đợt này (đã sửa, kh�
 ## Đợt 34 — bản 2026-10-14.12 (04/10)
 - Hồi quy **46/46** (ca mới: nháp vẫn tính thiếu, gửi rồi hết thiếu — đã chứng minh đỏ trên mã cũ).
 - Giao diện **25/25** (GD-25 mới: chạy đua đồng bộ — mã cũ xóa nhầm bản vừa lưu; nhóm ca báo cáo ngày chạy 3 lượt liên tiếp đều xanh).
+
+## MVP-05 build 2026-10-07.2 — B3/C3 (kiểm thử Windows 08/10)
+- Cú pháp/build và diff check: ĐẠT.
+- Sáu ca mới GD-B3/GD-C3 trên DB thử: 6/6 ĐẠT, 0 bỏ qua. Kiểm tra nội dung/tệp/ảnh từ hộp duyệt, lỗi 403/500 không có nút quyết định, đóng cửa sổ trước phản hồi, bảo toàn nháp và gán tài khoản đa công trình qua UI/bấm duyệt thật.
+- Lượt đầy đủ đầu: 67/68, GD-11 timeout tại màn hình chưa chọn công trình. Đã sửa ca thử chọn công trình 001 rõ ràng thay vì phụ thuộc mặc định; không sửa quyền để làm xanh test.
+- Lượt đầy đủ sau sửa ca thử: 68/68 ĐẠT, 0 lỗi, 0 bỏ qua, DB vina_ui_b3c3_full_retry_20261008. Bao gồm phân quyền, khóa, ngoại tuyến, xung đột và checkpoint tệp. Bằng chứng runtime-logs/b3c3-full-pass.txt; log trước giữ tại runtime-logs/b3c3-full-first.txt.
+- Chưa có CI hoặc commit/PR mới cho bản sửa cục bộ này. Nghiệm thu thao tác bằng tay trên phiên vận hành vẫn cần kết quả riêng.
+
+Sau triển khai bản 2026-10-07.2-mvp05: chạy lại GD-B3/GD-C3 6/6 đạt trên DB thử riêng. Health/API vận hành và byte tệp/ảnh đạt; .env/container/volume giữ nguyên. Chi tiết runtime-logs/NGHIEM-THU-MVP05-20261007.md.

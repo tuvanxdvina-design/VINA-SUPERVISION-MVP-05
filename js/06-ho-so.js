@@ -15,8 +15,8 @@ function renderDocs(){
  const stuckHtml=stuck.length?'<div class="notice" style="margin-bottom:12px;background:#fef3f2;border-color:#fecdca"><b>'+stuck.length+' hồ sơ còn nằm trên thiết bị này, chưa lên máy chủ</b> (tài khoản khác chưa thấy):<table style="margin-top:6px"><tbody>'+stuck.map(x=>'<tr><td><b>'+esc(x.code||'')+'</b> '+esc(x.name||'')+'<br><span style="color:#b42318">Lý do: '+esc(x.lastError||'chưa thử đồng bộ')+'</span></td><td style="white-space:nowrap"><button onclick="retryLegacyDocs()">Thử lại</button> <button onclick="downloadLegacyDoc(\''+x.id+'\')">Tải tệp về</button> <button class="danger" onclick="discardLegacyDoc(\''+x.id+'\')">Bỏ bản này</button></td></tr>').join('')+'</tbody></table></div>':'';
  el.innerHTML=stuckHtml+(rows?'<table><thead><tr><th>Mã</th><th>Công trình</th><th>Nhóm</th><th>Tên hồ sơ</th><th>Trạng thái</th><th>Người lập</th><th>Tài liệu</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>':'<p class="muted">Chưa có hồ sơ.'+(apiOnline()?'':' (Đang ngoại tuyến — danh sách lấy từ lần tải gần nhất)')+'</p>');
 }
-function viewDoc(docId){
- const x=db.docs.find(v=>v.id===docId);if(!x)return;if(x.details?.snapshot&&typeof viewReport==='function')return viewReport(docId);const p=db.projects.find(v=>v.id===x.projectId)||{};const d=x.details||{};const role=roleToken(qualityAuthUser()?.role_name||'');
+function viewDoc(docId,loadedDoc){
+ const x=loadedDoc||db.docs.find(v=>v.id===docId);if(!x)return;if(x.details?.snapshot&&typeof viewReport==='function')return viewReport(docId,loadedDoc);const p=db.projects.find(v=>v.id===x.projectId)||{};const d=x.details||{};const role=roleToken(qualityAuthUser()?.role_name||'');
  const lead=['ADMIN','DIRECTOR','TVGS_LEAD'].includes(role);
  const flow=[x.status==='DRAFT'&&canModifyDoc(x)?['submit','Gửi duyệt']:null,x.status==='SUBMITTED'&&docCanDecide(x)?['approve','Duyệt']:null,x.status==='SUBMITTED'&&docCanDecide(x)?['reject','Trả lại']:null,x.status==='APPROVED'&&docCanDecide(x)?['lock','Khóa hồ sơ']:null,x.status==='LOCKED'&&docCanDecide(x)?['reopen','Mở khóa (tăng phiên bản)']:null].filter(Boolean);
  const pc=Array.isArray(d.personnelChanges)?d.personnelChanges:[];
@@ -25,6 +25,7 @@ function viewDoc(docId){
   +(docGroup(x)==='REPORT'?'<div class="notice"><b>Báo cáo '+esc({DAILY:'ngày',WEEKLY:'tuần',MONTHLY:'tháng',FINAL:'hoàn thành'}[d.reportType]||'')+'</b> · Kỳ: '+esc(d.period||'')+' · Kế hoạch: '+(d.plannedProgress??0)+'% · Thực tế: '+(d.actualProgress??0)+'%<br>Nhân lực: '+(d.manpower??0)+' · Khối lượng: '+esc(d.volumeCompleted||'')+'</div>':'')
   +(pc.length?'<p><b>Biến động nhân sự tổ TVGS:</b></p><ol>'+pc.map(v=>'<li>'+esc(v.date||'')+' — rút: '+esc(v.removed||'')+' → thay: '+esc(v.added||'')+(v.decision?' ('+esc(v.decision)+')':'')+'</li>').join('')+'</ol>':'')
   +'<hr><h4>Tài liệu tải lên</h4>'+docFileLinks(x)+'</div><div class="toolbar">'+(canModifyDoc(x)?'<button class="primary" onclick="closeModal();openDoc(\''+x.id+'\')">Sửa hồ sơ</button>':'')+flow.map(([a,t])=>'<button onclick="docWorkflow(\''+x.id+'\',\''+a+'\')">'+t+'</button>').join('')+deleteBtn('doc',x.serverId,x.projectId,(x.code||'')+' '+(x.name||''))+'</div>');
+ if(loadedDoc)document.querySelector('#mbody .toolbar')?.remove();
 }
 function upsertLocalDoc(doc){db.docs=db.docs||[];const i=db.docs.findIndex(x=>x.id===doc.id);if(i>=0)db.docs[i]=doc;else db.docs.unshift(doc)}
 function openDoc(docId='',forceProjectId=''){

@@ -1,5 +1,11 @@
 # CODEMAP — where things are (read this instead of whole files)
 
+## MVP-05 build 2026-10-07.2 — B3/C3
+- `js/11-duyet.js`: `openReviewDecision` tải chi tiết API trước quyết định; `reviewDecisionContext` giữ bản chỉ xem riêng, `showReviewLogFiles`/`showReviewPhotos`/`viewReviewDocument` xem tệp và toàn văn khi không có bản cục bộ. `reviewDecisionLoad` bỏ phản hồi đến muộn.
+- `js/01-core.js`: `showLogFiles`/`showLogPhotos` nhận bản đã tải để mở tệp/ảnh từ hộp duyệt. `js/06-ho-so.js`/`07-bao-cao.js`: `viewDoc`/`viewReport` nhận bản chỉ xem riêng, không ghi đè nháp.
+- `js/09-nhan-su.js` ghi `tmProjectId`; `js/10-tai-khoan.js` chỉ loại tài khoản đã liên kết trong công trình đang sửa, cho phép phân công nhiều công trình.
+- `backend/tests/ui/cases/15-review-and-multi-project.js`: sáu ca GD-B3/GD-C3; mô tả và thao tác nghiệm thu: `docs/KHAC-PHUC-B3-C3-MVP05.md`.
+
 Line numbers drift; locate with `Grep "function <name>" index.html -n`, then Read ~30 lines around it.
 
 ## Backend (backend/src)
