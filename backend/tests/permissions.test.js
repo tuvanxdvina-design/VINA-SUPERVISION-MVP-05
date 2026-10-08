@@ -268,4 +268,7 @@ test('PQ22: mỗi công trình một TVGS trưởng; chuyển giao kết thúc p
   assert.equal(expect(await users.gst.api.get('/project-members/my-permissions'),200)[A],undefined,'GST cũ hết phân công tại A');
   const team=expect(await users.admin.api.get('/project-personnel/project/'+A+'/team'),200);
   assert.deepEqual(team.filter(x=>/^(TVGS trưởng|Giám sát trưởng|Trưởng TVGS)$/.test(x.assignment_title)).map(x=>x.user_id),[users.ks.id]);
+  const health=expect(await users.admin.api.get('/reports/portfolio'),200).projects;
+  const noLead=id=>health.find(x=>x.id===id).alerts.some(a=>a.code==='NO_LEAD');
+  assert.equal(noLead(A),false); assert.equal(noLead(fixture.projects.C.id),true,'C chỉ có Phó → cảnh báo chưa có TVGS trưởng');
 });

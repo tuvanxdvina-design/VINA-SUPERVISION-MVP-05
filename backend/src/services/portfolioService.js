@@ -12,6 +12,7 @@
 // ============================================================================
 const pool = require('../utils/db');
 const progressService = require('./projectProgressService');
+const { isLeadTitle } = require('./permissionService');
 
 const THRESHOLDS = {
   spiWarn: 0.95, spiCrit: 0.85,          // SPI < 0.95 cảnh báo, < 0.85 nghiêm trọng (chỉ xét khi kế hoạch ≥ 5%)
@@ -145,6 +146,15 @@ async function projectHealth(project, asOfText) {
           FROM issues WHERE project_id = $1) x`, [project.id, asOf])).rows[0];
   out.issues = iss;
   if (iss.overdue) alerts.push(alert('CRITICAL', 'ISSUES_OVERDUE', `${iss.overdue} vấn đề chất lượng quá hạn xử lý`, `Đang mở ${iss.open} vấn đề.`, 'issues'));
+
+  // ---- 6. Mỗi công trình phải có một TVGS trưởng (theo chức danh tại công trình) ----
+  if (live) {
+    const titles = (await pool.query(`SELECT assignment_title FROM project_personnel WHERE project_id = $1 AND status = 'ACTIVE'
+      UNION ALL SELECT assignment_title FROM project_members WHERE project_id = $1 AND status = 'ACTIVE'`, [project.id])).rows;
+    if (!titles.some(r => isLeadTitle(r.assignment_title))) {
+      alerts.push(alert('WARNING', 'NO_LEAD', 'Chưa có TVGS trưởng', 'Bản gửi duyệt sẽ chuyển về Giám đốc/Admin. Phân công TVGS trưởng ở trang Nhân sự.', 'people'));
+    }
+  }
 
   // ---- 5. Báo cáo định kỳ chưa lập (tuần trước sau Thứ Ba; tháng trước sau ngày 5) ----
   if (started) {

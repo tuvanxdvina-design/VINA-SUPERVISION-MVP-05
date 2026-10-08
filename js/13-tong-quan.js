@@ -22,6 +22,7 @@ function goAlertTarget(pid,target){
  if(target==='inbox'&&typeof isReviewer==='function'&&isReviewer())return openInboxPage();
  if(!pid)return;
  if(target==='daily'||target==='issues'){currentProjectId=pid;return openProjectSection(target)}
+ if(target==='people'){goPage('people');return loadProjectTeamDirectory(pid)}
  if(target==='reports'){goPage('reports');const sel=document.getElementById('reportProject');if(sel){sel.value=pid;}if(typeof renderReports==='function')renderReports();return}
  openProjectDetail(pid);
  if(target==='progress')setTimeout(()=>document.getElementById('pdProgress')?.scrollIntoView({behavior:'smooth'}),400);
