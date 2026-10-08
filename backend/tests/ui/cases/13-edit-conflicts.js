@@ -24,6 +24,65 @@ async function openFixture(page, target, record) {
   await page.waitForSelector('#modal.show ' + target.input);
 }
 module.exports = function register() {
+  uiTest('GD-V5 daily: mạng vừa bật nhưng lần gửi đầu lỗi vẫn giữ bản nhập chờ', async page => {
+    await loginViaApi(page,'admin');
+    const b=apiAs(await tokenOf('admin')), a=apiAs(await tokenOf('duong'));
+    const pid=await projectIdByContract(await tokenOf('admin'),'001');
+    const created=await b.post('/daily-logs',{project_id:pid,log_date:'2020-02-01',shift:'CA3',work_summary:'Gốc'});
+    assert.equal(created.status,201);const record=created.body;
+    const target=targets.find(t=>t.type==='daily_log');
+    await openFixture(page,target,record);await page.fill('#lwork','BẢN ĐIỆN THOẠI');
+    await page.context().setOffline(true);await page.evaluate(id=>saveLog(id,false),record.id);
+    assert.equal((await a.patch('/daily-logs/'+record.id,{work_summary:'BẢN MÁY TÍNH',expected_row_version:record.row_version})).status,200);
+    let failures=0;
+    await page.route('**/api/daily-logs/'+record.id,route=>{
+      if(route.request().method()==='PATCH'&&failures++===0)return route.abort('failed');
+      return route.continue();
+    });
+    await page.context().setOffline(false);
+    await page.waitForFunction(id=>db.sync.find(x=>x.recordId===id)?.lastAttemptAt,record.id);
+    await page.waitForTimeout(3000);
+    assert.equal(await page.evaluate(()=>navigator.onLine),true);
+    const pending=await page.evaluate(id=>db.sync.find(x=>x.recordId===id),record.id);
+    assert.equal(pending.status,'PENDING');
+    assert.equal(pending.payload.work,'BẢN ĐIỆN THOẠI');
+    assert.equal((await b.get('/daily-logs/'+record.id)).body.work_summary,'BẢN MÁY TÍNH');
+    // A deliberate retry proves that row_version still detects the competing edit.
+    await page.evaluate(()=>showConflictDrafts());
+    await page.getByRole('button',{name:'Thử đồng bộ lại',exact:true}).click();
+    await page.waitForFunction(id=>db.sync.find(x=>x.recordId===id)?.status==='CONFLICT',record.id);
+    assert.equal((await b.get('/daily-logs/'+record.id)).body.work_summary,'BẢN MÁY TÍNH');
+    await page.getByRole('button',{name:'Xem hai bản',exact:true}).click();
+    await page.waitForSelector('#draftCompare table');
+    const text=await page.locator('#draftCompare').innerText();
+    assert.match(text,/BẢN ĐIỆN THOẠI/);assert.match(text,/BẢN MÁY TÍNH/);assert.match(text,/Người khác đã sửa/);
+    assert.ok(await page.locator('#draftCompare tr[style*="fff3cd"]').count());
+    await page.reload();await page.waitForSelector('nav button[data-page="projects"]',{state:'visible'});
+    assert.equal(await page.evaluate(id=>db.sync.find(x=>x.recordId===id)?.payload.work,record.id),'BẢN ĐIỆN THOẠI');
+  });
+  uiTest('GD-V5 bản tạo mới trùng ngày ca: đối chiếu, sửa lại hoặc bỏ không cần GET bản chưa có',async page=>{
+    await loginViaApi(page,'admin');const api=apiAs(await tokenOf('admin'));
+    const pid=await projectIdByContract(await tokenOf('admin'),'001');
+    assert.equal((await api.post('/daily-logs',{project_id:pid,log_date:'2020-02-02',shift:'CA3',work_summary:'Bản có sẵn'})).status,201);
+    const id=await page.evaluate(pid=>{
+      const id=crypto.randomUUID();const draft={id,projectId:pid,date:'2020-02-02',shift:'CA3',work:'Bản mới bị từ chối',status:'DRAFT',photos:[]};
+      db.logs.push(draft);queueSync('daily_log',id,'CREATE',draft);save();return id;
+    },pid);
+    await page.evaluate(()=>syncPendingDailyLogs());
+    assert.equal(await page.evaluate(id=>db.sync.find(x=>x.recordId===id)?.status,id),'CONFLICT');
+    await page.evaluate(()=>showConflictDrafts());
+    assert.match(await page.locator('#mbody').innerText(),/Dữ liệu bị từ chối/);
+    await page.getByRole('button',{name:'Sửa bản nhập',exact:true}).click();
+    await page.fill('#ldate','2020-02-03');await page.evaluate(id=>saveLog(id,false),id);
+    await page.waitForFunction(id=>!db.sync.some(x=>x.recordId===id),id);
+    assert.equal((await api.get('/daily-logs/'+id)).body.work_summary,'Bản mới bị từ chối');
+    const fresh=await page.evaluate(pid=>{const id=crypto.randomUUID();const draft={id,projectId:pid,date:'2020-02-02',shift:'CA3',work:'Bỏ chỉ bản mới',status:'DRAFT'};db.logs.push(draft);queueSync('daily_log',id,'CREATE',draft);save();return id;},pid);
+    await page.evaluate(()=>syncPendingDailyLogs());let reads=0;
+    page.on('request',r=>{if(r.method()==='GET'&&r.url().endsWith('/daily-logs/'+fresh))reads++});
+    await page.evaluate(()=>showConflictDrafts());await page.getByRole('button',{name:'Bỏ bản tạo mới trên máy',exact:true}).click();
+    await page.waitForFunction(id=>!db.sync.some(x=>x.recordId===id),fresh);assert.equal(reads,0);
+    assert.equal(await page.evaluate(id=>db.logs.some(x=>x.id===id),fresh),false);
+  });
   for(const competingEdit of [false,true]){
     uiTest('GD-OCC hồ sơ: tải tệp lỗi rồi thử lại '+(competingEdit?'vẫn chặn bản sửa mới của người khác':'không PATCH hoặc tải trùng tệp'),async page=>{
       await loginViaApi(page,'admin');
@@ -123,6 +182,11 @@ module.exports = function register() {
       if(target.type==='issue')await page.evaluate(()=>syncIssuesFromApi());
       const draft=await page.evaluate(({t,id})=>db[t.collection].find(x=>x.id===id),{t:target,id:record.id});
       assert.equal(draft[target.type==='daily_log'?'work':target.field],'Nội dung B đang nhập');
+      await page.evaluate(()=>showConflictDrafts());
+      await page.getByRole('button',{name:'Xem hai bản',exact:true}).click();
+      await page.waitForSelector('#draftCompare table');
+      assert.match(await page.locator('#draftCompare').innerText(),/Nội dung B đang nhập/);
+      assert.match(await page.locator('#draftCompare').innerText(),/Bản A đã lưu/);
       await page.reload();await page.waitForSelector('nav button[data-page="projects"]',{state:'visible'});
       assert.equal(await page.evaluate(({t,id})=>db.sync.find(x=>x.type===t.type&&x.recordId===id)?.status,{t:target,id:record.id}),'CONFLICT');
       assert.ok(user.id);

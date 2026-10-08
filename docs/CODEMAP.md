@@ -85,3 +85,6 @@ Selector hay dùng: `#loginScreen/#loginUsername/#loginPassword/#loginButton/#lo
 
 `backend/tests/regression.test.js` — one file, ordered tests sharing state (`P` = project ids by contract_no '001','002','003'; tokens: admin, thanhb (engineer, GS viên @001), hung (lead @001), son, tuan (unassigned), duong (director)). Append new tests at the end.
 `backend/tests/smoke-test.js` — against the live server (read-only unless --write).
+# Việc 5 — màn hình đối chiếu bản nhập
+
+`js/01-core.js`: `showConflictDrafts`, `compareConflictDraft`, `draftComparisonRows`, `retryPendingDraft`, `editRejectedDraft`, `draftIsNew`, `discardConflictDraft`. Bảng hai bản chỉ đọc; mã EDIT_CONFLICT tách khỏi từ chối dữ liệu; retry chỉ PENDING, không tự lấy row_version mới. `js/13-tong-quan.js` dẫn trực tiếp màn hình; `backend/tests/ui/cases/13-edit-conflicts.js` có thêm GD-V5. Chi tiết trước/sau: `docs/VIEC5-BAN-NHAP-DOI-CHIEU.md`.

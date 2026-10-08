@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kiểm tra kết nối MVP-05</title>
+<body style="font:18px system-ui;padding:16px;max-width:720px;margin:auto">
+<h1>Kiểm tra kết nối MVP-05</h1>
+<p>Chỉ đọc trạng thái. Không gửi báo cáo, không xóa bản nhập, không hiển thị khóa đăng nhập.</p>
+<button id="run" style="font:inherit;padding:12px">Kiểm tra lại</button>
+<pre id="out" style="white-space:pre-wrap"></pre>
+<script>
+const output=document.getElementById('out');
+async function run(){
+ document.getElementById('run').disabled=true;output.textContent='';
+ const say=s=>{output.textContent+=s+'\n'};
+ try{
+  const auth=JSON.parse(localStorage.getItem('vina_supervision_auth')||'null');
+  say('Địa chỉ: '+location.origin);say('Có phiên đăng nhập: '+(auth?.token?'Có':'Không'));
+  const key='vina_supervision_mvp01:'+(auth?.user?.id||'guest');
+  const local=JSON.parse(localStorage.getItem(key)||'{}');
+  const pending=(local.sync||[]).filter(x=>x.status==='PENDING'&&x.type==='daily_log');
+  say('Báo cáo ngày đang chờ: '+pending.length);
+  say('Báo cáo ngày cần đối chiếu: '+(local.sync||[]).filter(x=>x.status==='CONFLICT'&&x.type==='daily_log').length);
+  const draft=(local.sync||[]).find(x=>x.type==='daily_log'&&['PENDING','CONFLICT'].includes(x.status));
+  const record=(local.logs||[]).find(x=>x.id===draft?.recordId);
+  const projectId=draft?.payload?.projectId||record?.projectId||local.projects?.[0]?.id;
+  const checks=[['Máy chủ','/health'],['Danh sách công trình','/api/projects']];
+  if(projectId)checks.push(['Danh sách báo cáo','/api/daily-logs?project_id='+encodeURIComponent(projectId)]);
+  for(const [label,path] of checks){
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+   try{
+    const response=await fetch(path,{cache:'no-store',signal:controller.signal,headers:auth?.token&&path.startsWith('/api/')?{Authorization:'Bearer '+auth.token}:{}});
+    say(label+': HTTP '+response.status);
+    if(path==='/health'&&response.ok){const h=await response.json();say('Build máy chủ: '+h.build);}
+    else if(response.status===401)say('Phiên đăng nhập chưa được máy chủ chấp nhận. Bản nhập vẫn được giữ.');
+    if(!response.bodyUsed)await response.body?.cancel();
+   }catch(error){say(label+': '+(error.name==='AbortError'?'Hết thời gian kết nối':error.message));}
+   finally{clearTimeout(timer)}
+  }
+  say('Kiểm tra xong. Quay lại tab MVP-05; không xóa dữ liệu Chrome.');
+ }catch(_){say('Không đọc được trạng thái trên thiết bị. Không thay đổi bản nhập.');}
+ finally{document.getElementById('run').disabled=false}
+}
+document.getElementById('run').onclick=run;void run();
+</script></body></html>

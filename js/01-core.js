@@ -284,7 +284,7 @@ save();
 }
 function exportJSON(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vina-supervision-backup.json';a.click()}
 function clearAll(){if(confirm('Xóa toàn bộ dữ liệu cục bộ?')){localStorage.removeItem(KEY);location.reload()}}
-function updateNet(){let el=document.getElementById('net');const conflicts=(db.sync||[]).filter(x=>x.status==='CONFLICT');el.textContent=(navigator.onLine?'● ONLINE':'● OFFLINE')+(conflicts.length?' · '+conflicts.length+' bản xung đột':'');el.style.background=conflicts.length?'#b42318':(navigator.onLine?'#027a48':'#b54708');el.onclick=conflicts.length?showConflictDrafts:null}
+function updateNet(){let el=document.getElementById('net');const conflicts=(db.sync||[]).filter(x=>x.status==='CONFLICT');const pending=(db.sync||[]).filter(x=>x.status==='PENDING');el.textContent=(navigator.onLine?'● ONLINE':'● OFFLINE')+(conflicts.length?' · '+conflicts.length+' bản cần đối chiếu':pending.length?' · '+pending.length+' bản chờ':'');el.style.background=conflicts.length?'#b42318':(navigator.onLine?'#027a48':'#b54708');el.onclick=(conflicts.length||pending.length)?showConflictDrafts:null}
 
 let activeEditVersion=null;
 function captureEditVersion(type,recordId,record){activeEditVersion={type,recordId,version:record?.rowVersion??null}}
@@ -300,11 +300,70 @@ function exportConflictDraft(queueId){
  const blob=new Blob([JSON.stringify({type:item.type,recordId:item.recordId,payload:item.payload,error:item.lastError},null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='vina-ban-nhap-'+item.recordId+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+const DRAFT_TYPES={project:'Công trình',daily_log:'Báo cáo ngày',issue:'Chất lượng',document:'Hồ sơ / báo cáo'};
+const DRAFT_COLLECTIONS={project:'projects',daily_log:'logs',issue:'issues',document:'docs'};
+const DRAFT_PATHS={project:'projects',daily_log:'daily-logs',issue:'issues',document:'documents'};
+function draftKind(x){return x.lastErrorCode==='EDIT_CONFLICT'?'Người khác đã sửa':x.status==='CONFLICT'?'Dữ liệu bị từ chối':'Chưa đồng bộ';}
+function draftIsNew(x){const local=db[DRAFT_COLLECTIONS[x.type]]?.find(r=>r.id===x.recordId);return x.operation==='CREATE'&&!local?.serverId&&!x.savedResult&&!x.savedRowVersion;}
 function showConflictDrafts(){
- const items=(db.sync||[]).filter(x=>x.status==='CONFLICT');
- openModal('Bản nhập cần đối chiếu','<p>Bản máy chủ chưa bị ghi đè. Xuất bản nháp trước khi tải dữ liệu mới; sau đó mở lại bản mới và nhập phần cần giữ.</p>'+items.map(x=>'<div class="card"><b>'+esc(({project:'Công trình',daily_log:'Báo cáo ngày',issue:'Chất lượng',document:'Hồ sơ / báo cáo'})[x.type]||x.type)+'</b><p>'+esc(x.lastError||'Xung đột')+'</p><button onclick="exportConflictDraft(\''+x.id+'\')">Xuất bản nháp</button> <button onclick="discardConflictDraft(\''+x.id+'\')">Bỏ bản nháp, tải bản mới</button></div>').join(''));
+ const items=(db.sync||[]).filter(x=>['CONFLICT','PENDING'].includes(x.status));
+ openModal('Bản nhập cần đối chiếu','<p>Nội dung và tệp trên thiết bị được giữ. Đối chiếu chỉ đọc; không tự ghi đè bản máy chủ.</p>'+items.map(x=>'<div class="card"><b>'+esc(DRAFT_TYPES[x.type]||x.type)+'</b><p><strong>'+esc(draftKind(x))+'</strong> '+esc(x.lastError||'Đang chờ gửi')+'</p><button onclick="compareConflictDraft(\''+x.id+'\')">Xem hai bản</button> '+(x.status==='PENDING'?'<button onclick="retryPendingDraft(\''+x.id+'\')">Thử đồng bộ lại</button> ':'')+(draftIsNew(x)||draftKind(x)==='Dữ liệu bị từ chối'?'<button onclick="editRejectedDraft(\''+x.id+'\')">Sửa bản nhập</button> ':'')+'<button onclick="exportConflictDraft(\''+x.id+'\')">Xuất bản nháp JSON</button> <button onclick="discardConflictDraft(\''+x.id+'\')">'+(draftIsNew(x)?'Bỏ bản tạo mới trên máy':'Bỏ bản nháp, tải bản mới')+'</button></div>').join('')+(items.length?'':'<p>Không có bản nhập đang chờ.</p>'));
+}
+async function retryPendingDraft(queueId){
+ const item=(db.sync||[]).find(x=>x.id===queueId);if(!item||item.status!=='PENDING')return;
+ if(!navigator.onLine)return alert('Thiết bị đang mất mạng. Bản nhập vẫn được giữ.');
+ const fn={project:syncPendingProjects,daily_log:syncPendingDailyLogs,document:syncPendingDocuments,issue:syncPendingIssues}[item.type];
+ try{if(fn)await fn();}catch(error){alert('Chưa đồng bộ được; bản nhập vẫn được giữ. '+error.message)}
+ showConflictDrafts();
+}
+async function editRejectedDraft(queueId){
+ const x=(db.sync||[]).find(r=>r.id===queueId);if(!x||(!draftIsNew(x)&&draftKind(x)!=='Dữ liệu bị từ chối'))return;
+ const open={project:openProject,daily_log:openLog,document:openDoc,issue:openIssue}[x.type];if(open)await open(x.recordId);
+}
+function draftReadable(value){
+ if(value===null||value===undefined||value==='')return '—';
+ if(Array.isArray(value))return value.map(draftReadable).join('\n')||'—';
+ if(typeof value==='object')return Object.entries(value).filter(([k])=>!['id','data','content','blob','serverId'].includes(k)).map(([k,v])=>(DRAFT_LABELS[k]||k)+': '+draftReadable(v)).join('\n')||'—';
+ const words={DRAFT:'Nháp',SUBMITTED:'Chờ duyệt',APPROVED:'Đã duyệt',LOCKED:'Đã khóa',RETURNED:'Yêu cầu chỉnh sửa',OPEN:'Đang mở',CLOSED:'Đã đóng',CA1:'Ca 1',CA2:'Ca 2',CA3:'Ca 3'};
+ return typeof value==='boolean'?(value?'Có':'Không'):(Object.hasOwn(words,value)?words[value]:String(value));
+}
+const DRAFT_LABELS={name:'Tên',code:'Mã',title:'Tiêu đề',detail:'Nội dung',date:'Ngày',shift:'Ca',work:'Công việc',note:'Ghi chú',weather:'Thời tiết',workers:'Nhân lực',machines:'Máy móc',workerItems:'Loại nhân lực',machineItems:'Loại máy',technicalStaffCount:'Cán bộ kỹ thuật',recommendation:'Kiến nghị',contractorUnit:'Nhà thầu',itemCategory:'Hạng mục',contractNo:'Số hợp đồng',contractDate:'Ngày hợp đồng',contractValue:'Giá trị hợp đồng',contractContent:'Nội dung hợp đồng',province:'Tỉnh/thành',address:'Địa chỉ',client:'Chủ đầu tư',progress:'Tiến độ',status:'Trạng thái',priority:'Mức độ',due:'Hạn',type:'Loại',details:'Nội dung chi tiết',sections:'Nhận xét',quality:'Chất lượng',schedule:'Tiến độ',safety:'An toàn',issues:'Tồn tại',next:'Kế hoạch tới',conclusion:'Kết luận',count:'Số lượng',unit:'Đơn vị',recipients:'Nơi nhận',documentType:'Loại văn bản',file_name:'Tên tệp',file_size:'Dung lượng',full_name:'Họ tên'};
+DRAFT_LABELS.files='Tệp trên máy / tệp đang chờ';
+function draftComparisonRows(label,left,right,hasServer){
+ if((left&&typeof left==='object'&&!Array.isArray(left))||(right&&typeof right==='object'&&!Array.isArray(right))){
+  const keys=[...new Set([...Object.keys(left||{}),...Object.keys(right||{})])].filter(k=>!['id','data','content','blob','serverId'].includes(k));
+  return keys.map(k=>draftComparisonRows(label+' / '+(DRAFT_LABELS[k]||k),left?.[k],right?.[k],hasServer)).join('');
+ }
+ const a=draftReadable(left),b=hasServer?draftReadable(right):'Chưa có / chưa tải được';const different=hasServer&&a!==b;
+ return '<tr'+(different?' style="background:#fff3cd"':'')+'><th>'+esc(label)+(different?' · Khác':'')+'</th><td style="white-space:pre-wrap">'+esc(a)+'</td><td style="white-space:pre-wrap">'+esc(b)+'</td></tr>';
+}
+async function compareConflictDraft(queueId){
+ const item=(db.sync||[]).find(x=>x.id===queueId);if(!item)return;
+ openModal('Đối chiếu '+(DRAFT_TYPES[item.type]||''),'<p id="draftCompare">Đang tải bản máy chủ; bản nhập trên máy được giữ nguyên...</p>');
+ const box=document.getElementById('draftCompare');
+ const local=db[DRAFT_COLLECTIONS[item.type]]?.find(r=>r.id===item.recordId)||{};
+ let server=null,message='Bản tạo mới chưa có trên máy chủ.';
+ if(!draftIsNew(item))try{
+   const raw=await apiRequest('/'+DRAFT_PATHS[item.type]+'/'+encodeURIComponent(local.serverId||item.recordId));
+   server={project:mapProjectFromApi,daily_log:mapDailyLogFromApi,document:mapDocumentFromApi,issue:mapIssueFromApi}[item.type](raw);
+ }catch(error){message='Không tải được bản máy chủ: '+error.message;}
+ if(!box.isConnected)return;
+ const payload=item.type==='document'?{...local,...(item.payload.name!==undefined?{name:item.payload.name}:{}),...(item.payload.details!==undefined?{details:item.payload.details}:{}),...(item.payload.type!==undefined?{type:item.payload.type}:{})}:item.payload||{};
+ const left={...local,...payload};
+ const pendingFiles=typeof queuedFiles==='function'?await queuedFiles(item.type,item.recordId):[];
+ left.files=[...(local.files||[]).map(f=>({name:f.name||f.file_name})),...pendingFiles.map(f=>({name:f.name}))];
+ if(!box.isConnected)return;
+ const fields=Object.keys(DRAFT_LABELS).filter(k=>k in left||(server&&k in server));
+ box.outerHTML='<div id="draftCompare"><p>'+esc(draftKind(item))+'. '+(server?'Ô màu vàng có nội dung khác nhau.':esc(message))+'</p><div style="overflow:auto"><table><thead><tr><th>Nội dung</th><th>Bản trên máy</th><th>Bản máy chủ</th></tr></thead><tbody>'+fields.map(k=>draftComparisonRows(DRAFT_LABELS[k],left[k],server?.[k],!!server)).join('')+'</tbody></table></div><p>Bản nhập và hàng đợi/tệp vẫn được giữ. Bản máy chủ không bị thay đổi.</p><button onclick="showConflictDrafts()">Quay lại danh sách</button></div>';
 }
 async function discardConflictDraft(queueId){
+ const fresh=(db.sync||[]).find(x=>x.id===queueId);if(!fresh||fresh.sending)return;
+ if(draftIsNew(fresh)){
+  if(!confirm('Bỏ bản tạo mới và tệp chờ trên thiết bị này? Nội dung chưa có trên máy chủ sẽ bị bỏ.'))return;
+  if(typeof queuedFiles==='function')for(const file of await queuedFiles(fresh.type,fresh.recordId))await removeQueuedFile(file.id);
+  db[DRAFT_COLLECTIONS[fresh.type]]=db[DRAFT_COLLECTIONS[fresh.type]].filter(x=>x.id!==fresh.recordId);
+  db.sync=db.sync.filter(x=>x.recordId!==fresh.recordId||x.type!==fresh.type);save();showConflictDrafts();return;
+ }
  if(!apiOnline())return alert('Cần kết nối mạng để tải bản mới.');
  if(!confirm('Bạn đã xuất hoặc sao chép nội dung cần giữ? Bỏ bản nháp chỉ trên thiết bị này và tải lại bản máy chủ.'))return;
  const item=db.sync.find(x=>x.id===queueId);if(!item)return;
