@@ -13,7 +13,7 @@ router.use(auth.verifyToken);
 const managers = [rbac.ROLES.ADMIN, rbac.ROLES.DIRECTOR];
 
 function sendError(res, error) {
-  if (error.status) return res.status(error.status).json({ error: error.message });
+  if (error.status) return res.status(error.status).json({ error: error.message, code: error.code });
   if (error.code === '23503') return res.status(404).json({ error: 'Công trình hoặc tài khoản không tồn tại trên máy chủ' });
   console.error('project-personnel:', error.message);
   return res.status(500).json({ error: 'Không xử lý được nhân sự công trình' });
@@ -32,6 +32,14 @@ async function validatePackageAssignment(projectId, packageId) {
   if (!packageId) return 'Công trình này đã khai báo Gói thầu — hãy chọn gói thầu phụ trách cho nhân sự';
   if (!packages.some(p => p.id === packageId)) return 'Gói thầu đã chọn không thuộc công trình này';
   return null;
+}
+
+// Chuyển giao TVGS trưởng: ghi dấu vết kết thúc phân công của người cũ.
+async function auditLeadTransfer(req, replaced, row) {
+  for (const old of replaced || []) {
+    await req.audit('project_personnel', old.personnel_id || old.user_id, 'TRANSFER_LEAD',
+      old, { to_personnel_id: row.id, to_name: row.full_name }, req.user.userId);
+  }
 }
 
 // Danh sách hợp nhất (mỗi người một dòng) — dùng cho trang Nhân sự, Chi tiết công trình, Quản lý quyền.
@@ -76,8 +84,9 @@ router.post('/', access.body, rbac.checkRole(managers), async (req, res) => {
     if (String(full_name).length > 255 || String(assignment_title).length > 120) return res.status(400).json({ error: 'Thông tin nhân sự vượt giới hạn' });
     const packageError = await validatePackageAssignment(project_id, req.body.bidding_package_id || null);
     if (packageError) return res.status(400).json({ error: packageError });
-    const { row, created } = await service.upsert({ ...req.body, created_by: req.user.userId });
+    const { row, created, replaced } = await service.upsert({ ...req.body, created_by: req.user.userId });
     await req.audit('project_personnel', row.id, created ? 'CREATE' : 'UPDATE', null, row, req.user.userId);
+    await auditLeadTransfer(req, replaced, row);
     res.status(created ? 201 : 200).json(row);
   } catch (error) { sendError(res, error); }
 });
@@ -98,8 +107,9 @@ router.put('/:id', rbac.checkRole(managers), loadPersonnel, async (req, res) => 
     const effectivePackageId = req.body.bidding_package_id !== undefined ? req.body.bidding_package_id : req.personnel.bidding_package_id;
     const packageError = await validatePackageAssignment(req.personnel.project_id, effectivePackageId || null);
     if (packageError) return res.status(400).json({ error: packageError });
-    const row = await service.update(req.params.id, req.body);
+    const { row, replaced } = await service.update(req.params.id, req.body);
     await req.audit('project_personnel', row.id, 'UPDATE', req.personnel, row, req.user.userId);
+    await auditLeadTransfer(req, replaced, row);
     res.json(row);
   } catch (error) { sendError(res, error); }
 });

@@ -72,6 +72,7 @@ class ProjectMemberService {
           UPDATE project_personnel SET assignment_title = $1, updated_at = NOW()
           WHERE project_id = $2 AND user_id = $3 AND status = 'ACTIVE'
         `, [member.assignment_title, member.project_id, member.user_id]);
+        await personnelService.ensureSingleLead(client, member.project_id, member.assignment_title, { userId: member.user_id });
       }
       await personnelService.saveAccess(client, id, data.access_permissions, data.work_scope);
       await client.query('COMMIT');
