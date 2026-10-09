@@ -181,13 +181,16 @@ async function loadProjectDetailMembers(pid){
 // Hạng mục qua dropdown xếp tầng theo đúng gói thầu được gán, thay vì gõ tự do.
 // ============================================================================
 let biddingPackagesByProject={};
-async function loadBiddingPackages(pid,force=false){
+async function loadBiddingPackages(pid,force=false,{signal}={}){
  if(!pid)return [];
  if(!force&&biddingPackagesByProject[pid])return biddingPackagesByProject[pid];
- if(!apiOnline())return biddingPackagesByProject[pid]||[];
- try{biddingPackagesByProject[pid]=await apiRequest('/bidding-packages?project_id='+encodeURIComponent(pid))}
- catch(error){console.warn('Không tải được gói thầu:',error.message);if(!biddingPackagesByProject[pid])biddingPackagesByProject[pid]=[]}
- return biddingPackagesByProject[pid];
+ if(!apiOnline()||navigator.onLine===false)return biddingPackagesByProject[pid]||db.biddingPackagesCache?.[pid]||[];
+ try{
+  biddingPackagesByProject[pid]=await apiRequest('/bidding-packages?project_id='+encodeURIComponent(pid),{signal});
+  db.biddingPackagesCache=db.biddingPackagesCache||{};db.biddingPackagesCache[pid]=biddingPackagesByProject[pid];persistLocal();
+ }
+ catch(error){console.warn('Không tải được gói thầu:',error.message)}
+ return biddingPackagesByProject[pid]||db.biddingPackagesCache?.[pid]||[];
 }
 function biddingItemChips(contractorId,items){
  return (items||[]).map((it,i)=>'<span class="chip" style="margin:2px 4px 2px 0">'+esc(it.name)+(it.unit?' ('+esc(it.unit)+')':'')+' <a href="#" onclick="removeBiddingItem(\''+contractorId+'\','+i+');return false" title="Xóa hạng mục">✕</a></span>').join('')||'<span class="muted">Chưa có hạng mục</span>';

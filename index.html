@@ -18,10 +18,10 @@
 header{height:60px;background:#0f172a;color:#fff;display:flex;align-items:center;padding:0 18px;gap:18px;position:sticky;top:0;z-index:10}
 header b{font-size:18px}.status{margin-left:auto;font-size:12px;padding:6px 10px;border-radius:99px;background:#344054}
 .logout-button{color:#fff;border-color:#667085;background:#1d2939;white-space:nowrap}
-.layout{display:flex;min-height:calc(100vh - 60px)}aside{width:240px;background:#fff;border-right:1px solid var(--line);padding:12px;position:sticky;top:60px;height:calc(100vh - 60px)}
+.layout{display:flex;min-height:calc(100vh - 60px)}aside{width:240px;flex-shrink:0;background:#fff;border-right:1px solid var(--line);padding:12px;position:sticky;top:60px;height:calc(100vh - 60px);overflow-y:auto;overflow-x:hidden}
 nav button{width:100%;text-align:left;border:0;background:transparent;padding:11px 12px;border-radius:8px;margin:2px 0;cursor:pointer;color:var(--text)}
 nav button.active,nav button:hover{background:#eef4ff;color:var(--pri)}
-main{flex:1;padding:22px;max-width:1500px;margin:auto;width:100%}
+main{flex:1;padding:22px;max-width:1500px;margin:auto;width:100%;min-width:0}
 .page{display:none}.page.active{display:block}.grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 1px 2px #1018280d}
 .kpi{font-size:28px;font-weight:700;margin-top:8px}.muted{color:var(--muted);font-size:13px}
@@ -46,17 +46,18 @@ table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px s
 .detail-meta .item{background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:10px}
 .detail-meta .item b{display:block;font-size:12px;color:var(--muted);font-weight:600}
 @media(max-width:900px){aside{width:72px}aside span{display:none}.g4,.g3{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){aside{display:none}main{padding:12px}.g4,.g3,.row{grid-template-columns:1fr}.personnel-change-row{grid-template-columns:1fr!important}header{height:54px}}
-@media(max-width:600px){
-  header{padding:0 8px;gap:6px;flex-wrap:wrap}header b{font-size:13px;line-height:1.1;max-width:92px;overflow-wrap:anywhere}header .muted{display:none}
+@media(max-width:900px){
+  header{height:54px;padding:0 8px;gap:6px;flex-wrap:wrap}header b{font-size:13px;line-height:1.1;max-width:92px;overflow-wrap:anywhere}header .muted{display:none}
   header #hdrUser{display:block;font-size:11px;color:#d0d5dd;width:100%;order:3}
   header .status{font-size:10px;padding:5px 7px}header .logout-button{font-size:11px;padding:7px 8px;min-height:36px}
   .layout{display:block;min-height:calc(100dvh - 54px)}
   aside{display:block;position:fixed;top:auto;bottom:0;left:0;right:0;width:100%;height:auto;z-index:20;padding:4px 6px calc(4px + env(safe-area-inset-bottom));border-right:0;border-top:1px solid var(--line);box-shadow:0 -2px 12px #10182818}
   nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:thin}
-  nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:0 0 auto;width:62px;min-height:48px;white-space:normal;margin:0;padding:6px 3px;font-size:17px}
+  nav button{display:flex;position:relative;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:0 0 auto;width:78px;min-height:64px;white-space:normal;margin:0;padding:7px 4px;font-size:18px}
   /* Điện thoại cầm dọc: vẫn hiện tên mục (cỡ nhỏ, dưới biểu tượng) để biết đúng mục cần vào, không chỉ đoán theo icon. */
-  aside span{display:block;font-size:9px;line-height:1.15;max-width:58px;text-align:center;white-space:normal}
-  main{padding:12px 12px calc(82px + env(safe-area-inset-bottom));max-width:100%;min-width:0}
+  aside span{display:block;font-size:11px;line-height:1.2;max-width:70px;text-align:center;white-space:normal;overflow-wrap:anywhere}
+  aside .nav-badge{position:absolute;top:2px;right:2px;margin:0}
+  main{padding:12px 12px calc(96px + env(safe-area-inset-bottom));max-width:100%;min-width:0}
   .card{padding:12px;min-width:0}table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
   th,td{min-width:90px}button,.btn{min-height:44px}input,select,textarea{font-size:16px;min-height:44px}
   .modal{padding:8px}.modalbox{max-height:calc(100dvh - 16px);padding:14px}
@@ -87,11 +88,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px s
 /* Biểu mẫu dài trong hộp thoại: thanh nút Lưu/Gửi luôn bám đáy, không phải cuộn hết form mới thấy. */
 #mbody>.toolbar:last-child,#mbody>.row>.toolbar:last-child{position:sticky;bottom:-20px;background:#fff;padding:10px 0;margin-bottom:-6px;z-index:2;box-shadow:0 -8px 10px -10px #10182866}
 @media(max-width:600px){#mbody>.toolbar:last-child,#mbody>.row>.toolbar:last-child{bottom:-14px}}
-/* Xoay ngang (man hinh rong hon trong khoang nay): du cho ten nam canh bieu tuong thay vi xep chong. */
-@media(orientation:landscape) and (max-width:900px){
-  nav button{flex-direction:row;gap:4px;width:auto;font-size:14px;padding:7px 8px}
-  aside span{display:inline;font-size:11px;max-width:none;white-space:nowrap}
-}
+/* Giữ thanh điều hướng dưới trong cả hai chiều điện thoại; không mở chữ
+   trên cột bên trái 72px khi xoay ngang, vì chữ sẽ tràn vào vùng thao tác. */
 
 .quality-form-sheet{border:1px solid #d0d5dd;padding:14px;background:#fff}.quality-form-head{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;border-bottom:1px solid #98a2b3;padding-bottom:10px}.quality-form-head img{width:62px;height:70px;object-fit:contain}.quality-form-head b{font-size:12px}.quality-form-head small,.quality-form-national span{display:block;font-size:10px;margin-top:4px}.quality-form-national{text-align:center;font-size:10px}.quality-form-title{text-align:center;border-bottom:1px solid #d0d5dd;padding:10px 0}.quality-form-title label{display:inline-block;margin-right:8px}.quality-form-title select{width:auto}.quality-form-title h3{margin:12px 0 6px;font-size:17px}.quality-form-title input{max-width:300px;text-align:center}.quality-form-block{border-bottom:1px solid #e4e7ec;padding:8px 0}.quality-form-block h4{margin:0 0 8px;font-size:14px}.quality-form-sheet .participant-row{grid-template-columns:1fr 1fr 1fr auto!important}.quality-form-sheet .quality-form-head img{background:#fff}@media(max-width:600px){.quality-form-head{grid-template-columns:auto 1fr}.quality-form-national{grid-column:1/-1}.quality-form-head img{width:48px;height:54px}.quality-form-sheet .participant-row{grid-template-columns:1fr!important}.quality-form-title h3{font-size:15px}}
 .login-screen{

@@ -16,6 +16,47 @@ function onLogPhotosPicked(input){
  renderLogPhotoPicks();
 }
 function removeLogPhotoPick(i){logPhotoPicks.splice(i,1);renderLogPhotoPicks()}
+async function renderSavedLogPhotos(log){
+ const target=document.getElementById('lphotosList');if(!target||!log?.id)return;
+ document.getElementById('lSavedPhotos')?.remove();
+ const box=document.createElement('div');box.id='lSavedPhotos';target.after(box);
+ box.textContent='Đang đọc ảnh đã lưu trên thiết bị...';
+ try{
+  const queued=(await queuedFiles('daily_log',log.id)).filter(f=>f.kind==='PHOTO');
+  if(!box.isConnected)return;
+  box.textContent='';
+  const title=document.createElement('p');title.className='muted';title.textContent=queued.length?queued.length+' ảnh đã lưu trên thiết bị, chờ đồng bộ. Ảnh này vẫn được giữ khi sửa báo cáo.':log.photoCount?log.photoCount+' ảnh đã đồng bộ.':'Ảnh đã lưu trên thiết bị';box.append(title);
+  async function add(name,source){
+   if(!box.isConnected)return;
+   const item=document.createElement('div'),button=document.createElement('button'),image=document.createElement('img'),label=document.createElement('div');
+   button.type='button';button.onclick=()=>openLogPhoto(button);button.setAttribute('aria-label','Xem ảnh '+name);image.className='photo';image.alt=name;image.src=source;button.append(image);label.className='muted';label.textContent=name;item.append(button,label);box.append(item);
+  }
+  for(const photo of log.photos||[])if(photo.data)await add(photo.name||'Ảnh đã lưu',photo.data);
+  for(const file of queued){
+   if(!box.isConnected)return;
+   try{const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file.blob)});await add(file.name,source)}
+   catch(_){const label=document.createElement('p');label.textContent=file.name+' — chưa mở được ảnh xem trước; tệp chờ vẫn được giữ.';if(box.isConnected)box.append(label)}
+  }
+  if(log.serverId&&apiOnline()){
+   const serverBox=document.createElement('div');serverBox.id='lServerPhotos';box.append(serverBox);
+   serverBox.textContent='Đang tải danh sách ảnh đã đồng bộ...';
+   try{
+    const files=await apiRequest('/daily-logs/'+encodeURIComponent(log.serverId)+'/attachments');
+    if(!serverBox.isConnected)return;
+    serverBox.textContent=files.length+' ảnh trên máy chủ';
+    for(const file of files){
+     if(!serverBox.isConnected)return;
+     const item=document.createElement('div'),label=document.createElement('div');label.className='muted';label.textContent=file.file_name;item.append(label);serverBox.append(item);
+     try{
+      const photo=await apiRequest('/daily-logs/'+encodeURIComponent(log.serverId)+'/attachments/'+encodeURIComponent(file.id));
+      if(!item.isConnected)return;
+      const button=document.createElement('button'),image=document.createElement('img');button.type='button';button.onclick=()=>openLogPhoto(button);button.setAttribute('aria-label','Xem ảnh '+file.file_name);image.className='photo';image.alt=file.file_name;image.src=photo.data_url;button.append(image);item.prepend(button);
+     }catch(_){if(item.isConnected)label.textContent=file.file_name+' — chưa tải được ảnh; ảnh vẫn được giữ trên máy chủ.'}
+    }
+   }catch(_){if(serverBox.isConnected)serverBox.textContent='Chưa tải được danh sách ảnh trên máy chủ. Nội dung đang sửa và ảnh chờ trên thiết bị vẫn được giữ.'}
+  }
+ }catch(_){if(box.isConnected)box.textContent='Chưa đọc được ảnh trên thiết bị. Không xóa dữ liệu ứng dụng; hãy thử mở lại báo cáo.'}
+}
 const LOG_STATUS={DRAFT:'Nháp',SUBMITTED:'Chờ duyệt',APPROVED:'Đã duyệt',LOCKED:'Đã khóa'};
 function renderLogs(){
   const pid=document.getElementById('logProject')?.value||'';
@@ -66,21 +107,25 @@ const logProjects=isEdit?(db.projects||[]).filter(p=>p.id===x.projectId):logProj
 const initPid=x.projectId||(logProjects[0]&&logProjects[0].id)||'';const initConfirm=canApproveIn(initPid);
 currentLogPackage=null;
 if(typeof loadBiddingPackages==='function'){
+ const controller=new AbortController();
+ // Dữ liệu gói thầu bổ sung không được giữ màn hình nhập chờ mạng vô hạn.
+ const timer=setTimeout(()=>controller.abort(),1500);
  try{
-  const packages=await loadBiddingPackages(initPid);
+  const packages=await loadBiddingPackages(initPid,false,{signal:controller.signal});
   if(packages.length&&typeof fetchTeam==='function'){
-   const rows=await fetchTeam(initPid,{sync:false});const mine=rows.find(r=>r.is_me);
+   const rows=controller.signal.aborted?(db.teamCache?.[initPid]?.rows||[]):await fetchTeam(initPid,{sync:false,signal:controller.signal});const mine=rows.find(r=>r.is_me);
    if(mine?.bidding_package_id)currentLogPackage=packages.find(p=>p.id===mine.bidding_package_id)||null;
   }
- }catch(_){}
+ }catch(_){}finally{clearTimeout(timer)}
 }
 const hasPackageItems=!!(currentLogPackage&&(currentLogPackage.contractors||[]).some(c=>(c.items||[]).length));
 const itemFieldsHtml=hasPackageItems
  ?'<div><label>&#x0110;ơn v&#x1ecb; tc (nh&#x00e0; th&#x1ea7;u trong g&#x00f3;i &quot;'+esc(currentLogPackage.name)+'&quot;)</label><select id="lcontractorunit" onchange="syncLogItemCategoryOptions()">'+currentLogPackage.contractors.map(c=>'<option value="'+esc(c.name)+'"'+(c.name===x.contractorUnit?' selected':'')+'>'+esc(c.name)+'</option>').join('')+(x.contractorUnit&&!currentLogPackage.contractors.some(c=>c.name===x.contractorUnit)?'<option value="'+esc(x.contractorUnit)+'" selected>'+esc(x.contractorUnit)+' (cũ)</option>':'')+'</select></div><div><label>H&#x1ea1;ng m&#x1ee5;c</label><select id="litemcategory"></select></div>'
  :'<div><label>&#x0110;ơn v&#x1ecb; tc</label><input id="lcontractorunit" value="'+esc(x.contractorUnit||'')+'"></div><div><label>H&#x1ea1;ng m&#x1ee5;c</label><input id="litemcategory" value="'+esc(x.itemCategory||'')+'"></div>';
-openModal(isEdit?'Sửa báo cáo ngày':'Lập báo cáo ngày',`${isEdit?reviewBlockHtml(x,{history:false}):''}<div class="row"><div><label>C&#x00f4;ng tr&#x00ec;nh</label><select id="lproj" onchange="updateLogSubmitLabel()">${logProjects.map(p=>`<option value="${p.id}" ${p.id===x.projectId?'selected':''}>${esc(p.code)} - ${esc(p.name)}</option>`).join('')}</select></div><div><label>Ng&#x00e0;y</label><input id="ldate" type="date" value="${x.date||new Date().toISOString().slice(0,10)}"></div><div><label>Ca l&#224;m vi&#7879;c</label><select id="lshift">${SHIFT_OPTIONS.map(([v,t])=>`<option value="${v}" ${(x.shift||'CA1')===v?'selected':''}>${t}</option>`).join('')}</select></div>${itemFieldsHtml}<div class="full"><label>C&#x00f4;ng vi&#x1ec7;c</label><textarea id="lwork" rows="3">${esc(x.work||'')}</textarea></div><div><label>Cbkt</label><input id="lcbkt" type="number" value="${x.technicalStaffCount??0}"></div><div class="full"><label>Nh&#x00e2;n l&#x1ef1;c (theo lo&#x1ea1;i th&#x1ee3)</label><div id="lworkersBox">${resourceRowsHtml('lworkers',x.workerItems)}</div><button type="button" onclick="addResourceRow('lworkers')">+ Th&#x00eam lo&#x1ea1;i</button></div><div class="full"><label>M&#x00e1;y m&#x00f3;c (theo lo&#x1ea1;i m&#x00e1;y)</label><div id="lmachinesBox">${resourceRowsHtml('lmachines',x.machineItems)}</div><button type="button" onclick="addResourceRow('lmachines')">+ Th&#x00eam lo&#x1ea1;i</button></div><div><label>Thời tiết</label><input id="lweather" value="${esc(x.weather||'')}" placeholder="Nắng / Mưa / Âm u..."><div>${WEATHER_QUICK_HTML}</div></div><div><label>Ghi ch&#x00fa</label><textarea id="lnote" rows="2">${esc(x.note||'')}</textarea></div><div class="full"><label>Ki&#x1ebf;n ngh&#x1ecb;</label><textarea id="lrecommendation" rows="2">${esc(x.recommendation||'')}</textarea></div><div class="full"><label>&#x1ea2;nh hi&#x1ec7;n tr&#x01b0;&#x1edd;ng</label><input id="lphotos" type="file" accept="image/jpeg,image/png,image/webp" multiple onchange="onLogPhotosPicked(this)"><div id="lphotosList" style="margin-top:4px"></div><div class="muted">Bấm nhiều lần để chụp/thêm từng ảnh — ảnh chọn trước không bị mất.</div></div><div class="full"><label>T&#x00e0;i li&#x1ec7;u k&#x00e8;m theo</label><input id="ldocuments" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,image/*" multiple><div class="muted">Cho ph&#x00e9;p t&#x1ea3;i bi&#x00ean b&#x1ea3;n, th&#x01b0; k&#x1ef9; thu&#x1ead;t ho&#x1eb7;c t&#x00e0;i li&#x1ec7;u li&#x00ean quan.</div></div><div class="full toolbar"><button class="primary" onclick="saveLog('${lid}',false)">${isEdit?'Lưu thay đổi':'Lưu nháp'}</button><button id="lsubmitbtn" onclick="saveLog('${lid}',true)">${initConfirm?'Lưu và xác nhận':'Lưu và gửi duyệt'}</button><span class="muted" id="lsubmithint">${initConfirm?'Xác nhận: bạn có quyền Duyệt tại công trình này nên chuyển thẳng Đã duyệt, không qua Chờ duyệt.':'Nháp: còn sửa được. Gửi duyệt: chuyển Trưởng TVGS duyệt, không sửa được nữa.'}</span></div></div>`);
+openModal(isEdit?'Sửa báo cáo ngày':'Lập báo cáo ngày',`${isEdit?reviewBlockHtml(x,{history:false}):''}<div class="row"><div><label>C&#x00f4;ng tr&#x00ec;nh</label><select id="lproj" onchange="updateLogSubmitLabel()">${logProjects.map(p=>`<option value="${p.id}" ${p.id===x.projectId?'selected':''}>${esc(p.code)} - ${esc(p.name)}</option>`).join('')}</select></div><div><label>Ng&#x00e0;y</label><input id="ldate" type="date" value="${x.date||new Date().toISOString().slice(0,10)}"></div><div><label>Ca l&#224;m vi&#7879;c</label><select id="lshift">${SHIFT_OPTIONS.map(([v,t])=>`<option value="${v}" ${(x.shift||'CA1')===v?'selected':''}>${t}</option>`).join('')}</select></div>${itemFieldsHtml}<div class="full"><label>C&#x00f4;ng vi&#x1ec7;c</label><textarea id="lwork" rows="3">${esc(x.work||'')}</textarea></div><div><label>Cbkt</label><input id="lcbkt" type="number" value="${x.technicalStaffCount??0}"></div><div class="full"><label>Nh&#x00e2;n l&#x1ef1;c (theo lo&#x1ea1;i th&#x1ee3)</label><div id="lworkersBox">${resourceRowsHtml('lworkers',x.workerItems)}</div><button type="button" onclick="addResourceRow('lworkers')">+ Th&#x00eam lo&#x1ea1;i</button></div><div class="full"><label>M&#x00e1;y m&#x00f3;c (theo lo&#x1ea1;i m&#x00e1;y)</label><div id="lmachinesBox">${resourceRowsHtml('lmachines',x.machineItems)}</div><button type="button" onclick="addResourceRow('lmachines')">+ Th&#x00eam lo&#x1ea1;i</button></div><div><label>Thời tiết</label><input id="lweather" value="${esc(x.weather||'')}" placeholder="Nắng / Mưa / Âm u..."><div>${WEATHER_QUICK_HTML}</div></div><div><label>Ghi ch&#x00fa</label><textarea id="lnote" rows="2">${esc(x.note||'')}</textarea></div><div class="full"><label>Ki&#x1ebf;n ngh&#x1ecb;</label><textarea id="lrecommendation" rows="2">${esc(x.recommendation||'')}</textarea></div><div class="full"><label>&#x1ea2;nh hi&#x1ec7;n tr&#x01b0;&#x1edd;ng</label><div class="toolbar"><button id="logCameraButton" type="button" onclick="document.getElementById('lcamera').click()">&#128247; Ch&#7909;p &#7843;nh</button><button id="logPhotoLibraryButton" type="button" onclick="document.getElementById('lphotos').click()">Ch&#7885;n &#7843;nh c&#243; s&#7861;n</button></div><input id="lcamera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onchange="onLogPhotosPicked(this)"><input id="lphotos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onchange="onLogPhotosPicked(this)"><div id="lphotosList" style="margin-top:4px"></div><div class="muted">Bấm nhiều lần để chụp/thêm từng ảnh — ảnh chọn trước không bị mất.</div></div><div class="full"><label>T&#x00e0;i li&#x1ec7;u k&#x00e8;m theo</label><input id="ldocuments" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,image/*" multiple><div class="muted">Cho ph&#x00e9;p t&#x1ea3;i bi&#x00ean b&#x1ea3;n, th&#x01b0; k&#x1ef9; thu&#x1ead;t ho&#x1eb7;c t&#x00e0;i li&#x1ec7;u li&#x00ean quan.</div></div><div class="full toolbar"><button class="primary" onclick="saveLog('${lid}',false)">${isEdit?'Lưu thay đổi':'Lưu nháp'}</button><button id="lsubmitbtn" onclick="saveLog('${lid}',true)">${initConfirm?'Lưu và xác nhận':'Lưu và gửi duyệt'}</button><span class="muted" id="lsubmithint">${initConfirm?'Xác nhận: bạn có quyền Duyệt tại công trình này nên chuyển thẳng Đã duyệt, không qua Chờ duyệt.':'Nháp: còn sửa được. Gửi duyệt: chuyển Trưởng TVGS duyệt, không sửa được nữa.'}</span></div></div>`);
 if(hasPackageItems)syncLogItemCategoryOptions(x.itemCategory||'');
 renderLogPhotoPicks();
+if(isEdit)void renderSavedLogPhotos(x);
 }
 function syncLogItemCategoryOptions(preselect){
  const contractorSel=document.getElementById('lcontractorunit');const itemSel=document.getElementById('litemcategory');
@@ -91,10 +136,19 @@ function syncLogItemCategoryOptions(preselect){
  if(preselect&&items.some(it=>it.name===preselect))itemSel.value=preselect;
 }
 function updateLogSubmitLabel(){const btn=document.getElementById('lsubmitbtn');const hint=document.getElementById('lsubmithint');if(!btn)return;const pid=document.getElementById('lproj')?.value||'';const isConfirm=canApproveIn(pid);btn.textContent=isConfirm?'Lưu và xác nhận':'Lưu và gửi duyệt';if(hint)hint.textContent=isConfirm?'Xác nhận: bạn có quyền Duyệt tại công trình này nên chuyển thẳng Đã duyệt, không qua Chờ duyệt.':'Nháp: còn sửa được. Gửi duyệt: chuyển Trưởng TVGS duyệt, không sửa được nữa.'}
+let logSaveRunning=false;
 async function saveLog(lid='',submitAfter=false){
+ if(logSaveRunning)return;
+ logSaveRunning=true;
+ const buttons=[...document.querySelectorAll('button[onclick^="saveLog("]')].map(button=>({button,disabled:button.disabled}));
+ for(const {button} of buttons)button.disabled=true;
+ try{return await persistLog(lid,submitAfter)}
+ finally{logSaveRunning=false;for(const {button,disabled} of buttons)if(button.isConnected)button.disabled=disabled}
+}
+async function persistLog(lid='',submitAfter=false){
 if(!canEditDailyLog())return alert('Bạn không có quyền sửa hoặc lập báo cáo ngày.');
 let existing=db.logs.find(l=>l.id===lid);if(existing&&!canEditLog(existing))return alert('Báo cáo ngày không còn được phép sửa.');
-let photos=[...(existing?.photos||[])];const photoFiles=[...logPhotoPicks];
+let photos=[...(existing?.photos||[])];const photoFiles=[...logPhotoPicks];const photoInput=document.getElementById('lphotos'),documentInput=document.getElementById('ldocuments');
 if(photoFiles.some(f=>!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>20*1024*1024))return alert('Ảnh phải là JPEG, PNG hoặc WebP, tối đa 20 MB trước khi tối ưu.');
 let documents=[...(existing?.documents||[])];const docFiles=[...(document.getElementById('ldocuments')?.files||[])];
 for(const f of docFiles)if(f.size>25*1024*1024)return alert('Tài liệu tối đa 25 MB mỗi tệp.');
@@ -107,7 +161,9 @@ const data={expectedRowVersion:editVersion('daily_log',lid,existing),projectId:l
 if(existing){Object.assign(existing,data);audit('UPDATE','daily_log',existing.id,`v${existing.version}`);queueSync('daily_log',existing.id,'UPDATE',data)}else{const x={id:id(),...data,createdAt:new Date().toISOString(),version:1};db.logs.unshift(x);queueSync('daily_log',x.id,'CREATE',data);audit('CREATE_AND_CONFIRM','daily_log',x.id,'v1')}
 const savedId=existing?.id||db.logs[0]?.id;
 const queuedEntries=[...photoFiles.map(file=>({file,kind:'PHOTO',category:'Ảnh hiện trường'})),...docFiles.map(file=>({file,kind:'DOCUMENT',category:'Tài liệu báo cáo ngày'}))];if(queuedEntries.length)await queueOfflineFiles('daily_log',savedId,queuedEntries);
+if(queuedEntries.length&&document.getElementById('lphotos')===photoInput){logPhotoPicks=logPhotoPicks.filter(file=>!photoFiles.includes(file));if(documentInput?.isConnected)documentInput.value='';renderLogPhotoPicks();void renderSavedLogPhotos(db.logs.find(log=>log.id===savedId));}
 save();if(typeof getAuthToken==='function'&&getAuthToken()&&window.syncPendingDailyLogs)await window.syncPendingDailyLogs();
+if(submitAfter){const item=(db.sync||[]).find(v=>v.type==='daily_log'&&v.recordId===savedId&&['PENDING','CONFLICT'].includes(v.status));if(item?.status==='PENDING'||await queuedFileCount('daily_log',savedId))return alert('Báo cáo và tệp đã được giữ trên thiết bị, chưa gửi duyệt. Hãy chờ đồng bộ xong rồi mở báo cáo để gửi duyệt.');}
 if(showQueuedConflict('daily_log',savedId))return;
 closeModal();
 if(submitAfter){const l=db.logs.find(v=>v.id===savedId);if(l?.serverId&&l.status==='DRAFT')await logAction(l.id,canApproveIn(l.projectId)?'confirm':'submit',true);else if(l&&!l.serverId)alert('Báo cáo ngày đã lưu trên thiết bị nhưng chưa lên máy chủ (mất mạng?). Sẽ gửi duyệt được sau khi đồng bộ.')}

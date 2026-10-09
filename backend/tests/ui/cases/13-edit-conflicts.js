@@ -24,6 +24,25 @@ async function openFixture(page, target, record) {
   await page.waitForSelector('#modal.show ' + target.input);
 }
 module.exports = function register() {
+  for(const otherEdit of [false,true])uiTest('GD-V6-version sửa khi bản tạo mới đang gửi '+(otherEdit?'vẫn chặn thay đổi từ máy khác':'dùng phiên bản CREATE của chính mình'),async page=>{
+    await loginViaApi(page,'admin');await page.evaluate(()=>syncDailyLogsFromApi());
+    let release,ack,held=false;const gate=new Promise(r=>release=r);
+    await page.route('**/api/daily-logs',async route=>{if(route.request().method()==='POST'&&!held){held=true;const response=await route.fetch();ack=await response.json();await page.evaluate(()=>window.__createAckReady=true);await gate;await route.fulfill({response})}else await route.continue()});
+    const id=await page.evaluate(otherEdit=>{const id=crypto.randomUUID(),payload={projectId:db.projects[0].id,date:otherEdit?'2020-05-02':'2020-05-01',shift:'CA3',work:'Initial',status:'DRAFT',createdById:getAuthUser().id,photos:[],documents:[]};db.logs.push({id,...payload});queueSync('daily_log',id,'CREATE',payload);save();void syncPendingDailyLogs();return id},otherEdit);
+    try{
+      await page.waitForFunction(()=>window.__createAckReady);assert.equal(ack.row_version,1);
+      await page.evaluate(async id=>{await openLog(id);document.getElementById('lwork').value='Edited before create acknowledgement';void saveLog(id,false)},id);
+      await page.waitForFunction(id=>db.sync.some(x=>x.recordId===id&&x.operation==='UPDATE'&&x.payload.expectedRowVersion==null),id);
+      const api=apiAs(await tokenOf('admin'));
+      if(otherEdit)assert.equal((await api.patch('/daily-logs/'+id,{work_summary:'Other computer',expected_row_version:1})).status,200);
+      release();await page.waitForFunction(()=>!dailyLogSyncRunning);await page.evaluate(()=>syncPendingDailyLogs());
+      const server=await api.get('/daily-logs/'+id);assert.equal(server.status,200);assert.equal(server.body.work_summary,otherEdit?'Other computer':'Edited before create acknowledgement');
+      const local=await page.evaluate(id=>({work:db.logs.find(x=>x.id===id).work,queue:db.sync.find(x=>x.recordId===id)}),id);
+      assert.equal(local.work,'Edited before create acknowledgement');
+      if(otherEdit){assert.equal(local.queue.status,'CONFLICT');assert.equal(local.queue.lastErrorCode,'EDIT_CONFLICT')}else assert.equal(local.queue,undefined);
+    }finally{release()}
+  });
+
   uiTest('GD-V5 daily: mạng vừa bật nhưng lần gửi đầu lỗi vẫn giữ bản nhập chờ', async page => {
     await loginViaApi(page,'admin');
     const b=apiAs(await tokenOf('admin')), a=apiAs(await tokenOf('duong'));

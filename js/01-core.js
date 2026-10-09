@@ -398,8 +398,24 @@ async function showLogPhotos(logId,loadedLog){
   }
   const gallery=document.getElementById('photoGallery');
   if(gallery)gallery.innerHTML=photos.length
-    ? photos.map(p=>`<div><img class="photo" src="${p.data}" alt="${esc(p.name)}"><div class="muted">${esc(p.name)}</div></div>`).join('')
+    ? photos.map(p=>`<div><button type="button" onclick="openLogPhoto(this)" aria-label="Xem ảnh ${esc(p.name)}" style="border:0;background:transparent;padding:0;cursor:zoom-in"><img class="photo" src="${esc(p.data)}" alt="${esc(p.name)}"></button><div class="muted">${esc(p.name)} — bấm để xem lớn</div></div>`).join('')
     : 'Báo cáo ngày này chưa có ảnh.';
+}
+function openLogPhoto(button){
+ const source=button?.querySelector('img');if(!source)return;
+ document.getElementById('logPhotoViewer')?.close();
+ const viewer=document.createElement('dialog');viewer.id='logPhotoViewer';
+ viewer.setAttribute('aria-label','Xem ảnh '+source.alt);
+ viewer.style.cssText='width:92vw;max-width:1200px;max-height:92vh;padding:12px;border:1px solid #ccc;border-radius:10px';
+ const title=document.createElement('div');title.textContent=source.alt;title.style.cssText='overflow-wrap:anywhere;margin-bottom:8px';
+ const controls=document.createElement('div');controls.className='toolbar';
+ const zoom=document.createElement('button');zoom.type='button';zoom.textContent='Phóng to';
+ const close=document.createElement('button');close.type='button';close.textContent='Đóng ảnh';close.onclick=()=>viewer.close();
+ const frame=document.createElement('div');frame.style.cssText='overflow:auto;max-height:72vh';
+ const image=document.createElement('img');image.src=source.src;image.alt=source.alt;image.style.cssText='display:block;max-width:100%;max-height:70vh;margin:auto';
+ zoom.onclick=()=>{const enlarged=zoom.textContent==='Phóng to';image.style.maxWidth=enlarged?'none':'100%';image.style.maxHeight=enlarged?'none':'70vh';zoom.textContent=enlarged?'Thu về':'Phóng to'};
+ controls.append(zoom,close);frame.append(image);viewer.append(title,controls,frame);document.body.append(viewer);
+ viewer.addEventListener('close',()=>viewer.remove(),{once:true});viewer.showModal();
 }
 const ACCOUNT_TYPES=['TVGS_LEAD','ENGINEER','MANAGER','DIRECTOR','ADMIN'];
 function cleanPersonName(v){return String(v||'').normalize('NFC').replace(/\s+/g,' ').trim()}

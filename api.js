@@ -41,6 +41,16 @@ function clearAuthSession() {
   localStorage.removeItem(AUTH_KEY);
 }
 
+async function fetchWithDeadline(url,options={},timeoutMs=30000){
+ const controller=new AbortController();let expired=false;
+ const abort=()=>controller.abort();
+ if(options.signal?.aborted)abort();else options.signal?.addEventListener('abort',abort,{once:true});
+ const timer=setTimeout(()=>{expired=true;controller.abort()},timeoutMs);
+ try{return await fetch(url,{...options,signal:controller.signal})}
+ catch(error){if(expired)throw Object.assign(new Error('Kết nối quá lâu. Bản nhập và tệp chờ vẫn được giữ; ứng dụng sẽ thử lại khi có mạng.'),{code:'NETWORK_TIMEOUT'});throw error}
+ finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort)}
+}
+
 async function apiRequest(path, options = {}) {
   const token = getAuthToken();
 
@@ -53,7 +63,7 @@ async function apiRequest(path, options = {}) {
     headers.Authorization = 'Bearer ' + token;
   }
 
-  const response = await fetch(API_BASE + path, {
+  const response = await fetchWithDeadline(API_BASE + path, {
     ...options,
     headers
   });
@@ -482,7 +492,7 @@ async function uploadLogAttachments(local, serverId) {
   for (const doc of local.documents || []) {
     if (doc.uploaded || !doc.data) continue;
     const blob = await (await fetch(doc.data)).blob();
-    const res = await fetch(API_BASE + '/daily-logs/' + encodeURIComponent(serverId) + '/files?name=' + encodeURIComponent(doc.name || 'tai-lieu'), { method: 'POST', headers: { Authorization: 'Bearer ' + getAuthToken(), 'Content-Type': doc.type || blob.type || 'application/octet-stream' }, body: blob });
+    const res = await fetchWithDeadline(API_BASE + '/daily-logs/' + encodeURIComponent(serverId) + '/files?name=' + encodeURIComponent(doc.name || 'tai-lieu'), { method: 'POST', headers: { Authorization: 'Bearer ' + getAuthToken(), 'Content-Type': doc.type || blob.type || 'application/octet-stream' }, body: blob },120000);
     if (!res.ok) { let m = 'HTTP ' + res.status; try { m = (await res.json()).error || m; } catch (_) {} throw new Error('Tài liệu "' + doc.name + '": ' + m); }
     doc.uploaded = true; delete doc.data;
   }
@@ -490,7 +500,7 @@ async function uploadLogAttachments(local, serverId) {
     const pending=await queuedFiles('daily_log',local.id);
     for(const file of pending){
       const route=file.kind==='PHOTO'?'/attachments-binary':'/files';
-      const res=await fetch(API_BASE+'/daily-logs/'+encodeURIComponent(serverId)+route+'?name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob});
+      const res=await fetchWithDeadline(API_BASE+'/daily-logs/'+encodeURIComponent(serverId)+route+'?name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob},120000);
       if(!res.ok){let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error('Tệp "'+file.name+'": '+m)}
       await removeQueuedFile(file.id);
     }
@@ -560,6 +570,9 @@ async function syncPendingDailyLogs() {
           if (local && result?.id) {
             local.serverId = result.id;
             local.rowVersion = Number(result.row_version);
+            // Chỉ dùng phiên bản đầu của CREATE đã được máy chủ xác nhận,
+            // không lấy phiên bản đọc lại để tự ghi đè thay đổi của người khác.
+            if(Number(result.row_version)===1)local.createdRowVersion=1;
             local.status = result.status || local.status;
             local.version = Number(
               result.version || local.version || 1
@@ -577,9 +590,11 @@ async function syncPendingDailyLogs() {
           const local = db.logs.find(x => x.id === item.recordId);
 
           if (local?.serverId) {
+            const payload={...(item.payload||local)};
+            if(payload.expectedRowVersion==null&&payload.rowVersion==null&&local.createdRowVersion===1)payload.expectedRowVersion=1;
             result = item.savedResult || await apiUpdateDailyLog(
               local.serverId,
-              mapLocalLogToApiData(item.payload || local)
+              mapLocalLogToApiData(payload)
             );
             item.savedResult = result;
 

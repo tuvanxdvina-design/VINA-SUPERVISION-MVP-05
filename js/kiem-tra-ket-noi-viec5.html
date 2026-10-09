@@ -18,9 +18,23 @@ async function run(){
   const local=JSON.parse(localStorage.getItem(key)||'{}');
   const pending=(local.sync||[]).filter(x=>x.status==='PENDING'&&x.type==='daily_log');
   say('Báo cáo ngày đang chờ: '+pending.length);
+  say('Số báo cáo khác nhau trong hàng đợi: '+new Set(pending.map(x=>x.recordId)).size);
+  for(const [index,item] of pending.entries()){
+   const entry=(local.logs||[]).find(x=>x.id===item.recordId);
+   say('Mục chờ '+(index+1)+': '+({CREATE:'Tạo mới',UPDATE:'Sửa bản có sẵn'}[item.operation]||'Khác')+'; có mã máy chủ: '+(entry?.serverId?'Có':'Không')+'; đang gửi: '+(item.sending?'Có':'Không')+'; lần thử: '+(item.lastAttemptAt||'Chưa ghi nhận'));
+  }
   say('Báo cáo ngày cần đối chiếu: '+(local.sync||[]).filter(x=>x.status==='CONFLICT'&&x.type==='daily_log').length);
   const draft=(local.sync||[]).find(x=>x.type==='daily_log'&&['PENDING','CONFLICT'].includes(x.status));
   const record=(local.logs||[]).find(x=>x.id===draft?.recordId);
+  if(draft){
+   say('Thao tác đang chờ: '+({CREATE:'Tạo mới',UPDATE:'Sửa bản có sẵn'}[draft.operation]||'Khác'));
+   say('Có mã bản máy chủ: '+(record?.serverId?'Có':'Không'));
+   say('Đang gửi: '+(draft.sending?'Có':'Không'));
+   say('Lần thử gần nhất: '+(draft.lastAttemptAt||'Chưa ghi nhận'));
+   const known=['EDIT_CONFLICT','ROW_VERSION_REQUIRED','MUST_CHANGE_PASSWORD','NETWORK_TIMEOUT'];
+   say('Mã lỗi: '+(known.includes(draft.lastErrorCode)?draft.lastErrorCode:(draft.lastErrorCode?'Có mã khác':'Không có')));
+   say('Lỗi mất kết nối: '+(/failed to fetch|network|fetch|timeout|hết thời gian/i.test(draft.lastError||'')?'Có':'Không'));
+  }
   const projectId=draft?.payload?.projectId||record?.projectId||local.projects?.[0]?.id;
   const checks=[['Máy chủ','/health'],['Danh sách công trình','/api/projects']];
   if(projectId)checks.push(['Danh sách báo cáo','/api/daily-logs?project_id='+encodeURIComponent(projectId)]);
