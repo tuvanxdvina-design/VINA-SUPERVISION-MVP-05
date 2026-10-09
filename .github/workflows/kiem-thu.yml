@@ -30,6 +30,7 @@ jobs:
       TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_regr_ci
       CONFLICT_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_reg_conflict_ci
       PERMISSION_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_reg_permissions_ci
+      COMPANY_PERSONNEL_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_reg_personnel_ci
       UI_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5434/vina_ui_ci
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +71,15 @@ jobs:
           if node --test --test-reporter=spec tests/permissions.test.js > tests/ci-results/permissions.txt 2>&1; then result=0; else result=$?; fi
           cat tests/ci-results/permissions.txt
           node scripts/report-ci.js tests/ci-results/permissions.txt permissions "$result"
+          exit "$result"
+        working-directory: backend
+      - name: Ho so nhan su cong ty (quyen, gop/tach, migration, snapshot)
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p tests/ci-results
+          if node --test --test-reporter=spec tests/company-personnel.test.js > tests/ci-results/personnel.txt 2>&1; then result=0; else result=$?; fi
+          cat tests/ci-results/personnel.txt
+          node scripts/report-ci.js tests/ci-results/personnel.txt personnel "$result"
           exit "$result"
         working-directory: backend
       - name: Giao dien (Chrome khong man hinh)

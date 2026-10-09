@@ -5,7 +5,7 @@
 // Chỉ gắn nhãn data-label cho từng ô + class "mcards"; bố cục do CSS @media trong index.html.
 // PC không đổi gì. Mã dựng bảng ở các tệp tính năng giữ nguyên.
 // ============================================================================
-const MCARD_CONTAINERS=['logsTable','projectsTable','docsTable','issuesTable','reportsTable','inboxBody','trashBody','auditTable','portfolioBox','pdLogs','pdIssues','pdDocs'];
+const MCARD_CONTAINERS=['companyPersonnelTable','logsTable','projectsTable','docsTable','issuesTable','reportsTable','inboxBody','trashBody','auditTable','portfolioBox','pdLogs','pdIssues','pdDocs'];
 function cardifyTable(table){
  const headRow=table.querySelector('thead tr')||[...table.rows].find(r=>r.cells.length&&[...r.cells].every(c=>c.tagName==='TH'));
  if(!headRow)return;

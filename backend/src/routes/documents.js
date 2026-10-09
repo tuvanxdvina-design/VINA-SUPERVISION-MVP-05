@@ -14,6 +14,7 @@ const MAX_FILE = 15 * 1024 * 1024;
 
 router.use(authMiddleware.verifyToken);
 router.use('/:id', access.record('documents'));
+router.use('/:id/certificate-snapshots',require('./certificateSnapshots')('documents'));
 
 function fail(res, err) {
   if (sendEditError(res, err)) return;

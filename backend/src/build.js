@@ -1,3 +1,3 @@
 // Mã phiên bản mã nguồn. Tăng mỗi lần cập nhật để run.bat biết cần khởi động lại backend
 // và giao diện biết máy chủ có đang chạy đúng phiên bản hay không.
-module.exports = { BUILD: '2026-10-09.7-mvp05' };
+module.exports = { BUILD: '2026-10-09.8-mvp05' };

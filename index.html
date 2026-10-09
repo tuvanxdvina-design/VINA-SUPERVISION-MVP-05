@@ -185,12 +185,14 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <button data-page="docs">📁 <span>Hồ sơ</span></button>
 <button data-page="reports">📈 <span>Báo cáo</span></button>
 <button data-page="people">👥 <span>Nhân sự</span></button>
+<button data-page="companyPeople">🪪 <span>Hồ sơ nhân sự công ty</span></button>
 <button data-page="audit">📋 <span>Audit Log</span></button>
 <button data-page="trash" style="display:none">🗑️ <span>Thùng rác</span></button>
 <button data-page="settings">⚙️ <span>Thiết lập</span></button>
 </nav></aside>
 <main>
 <section id="dashboard" class="page active">
+<div class="card" id="companyCertificateSummary">Đang tải thống kê chứng chỉ...</div>
 <div class="detail-header"><div><h2 id="pfTitle">Tổng quan tiến độ</h2><p class="muted" id="pfSub">Đèn trạng thái và cảnh báo tính tự động từ bảng tiến độ, báo cáo ngày, việc chờ duyệt, vấn đề chất lượng và báo cáo định kỳ.</p></div>
 <div class="toolbar" style="margin:0"><select id="pfFilter" onchange="renderPortfolio()"><option value="">Tất cả trạng thái</option><option value="RED">Đỏ — nghiêm trọng</option><option value="AMBER">Vàng — cần chú ý</option><option value="GREEN">Xanh — bình thường</option></select><button onclick="loadPortfolio(true)">↻ Tải lại</button></div></div>
 <div id="portfolioBox"><p class="muted">Đang tổng hợp...</p></div>
@@ -291,6 +293,12 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <div class="card"><div id="projectTeamDirectory"></div></div>
 </section>
 
+<section id="companyPeople" class="page">
+<h2>Hồ sơ nhân sự công ty</h2>
+<p class="muted">Một hồ sơ cho mỗi người, chứng chỉ và scan dùng chung ở mọi công trình. Chỉ Admin/Giám đốc được thay đổi.</p>
+<div class="toolbar" id="companyPersonnelActions"></div><div class="card" id="companyPersonnelTable"></div>
+</section>
+
 <section id="audit" class="page">
 <h2>Audit Log</h2>
 <div class="card"><div id="auditTable"></div></div>
@@ -340,6 +348,7 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <script src="./js/12-thung-rac.js"></script>
 <script src="./js/13-tong-quan.js"></script>
 <script src="./js/14-dang-nhap.js"></script>
+<script src="./js/17-ho-so-nhan-su.js"></script>
 <script src="./js/glue-1-core.js"></script>
 <script src="./api.js"></script>
 <script src="./js/00-khoi-dong.js"></script>

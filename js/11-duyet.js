@@ -23,7 +23,7 @@ function returnedChip(x){
  return '';
 }
 function reviewBlockHtml(x,{history=true}={}){
- const r=x?.lastReview;let h='';
+ const r=x?.lastReview;let h=typeof companySnapshotHtml==='function'?companySnapshotHtml(x?.personnelCertificateSnapshot||x?.personnel_certificate_snapshot,{id:x?.serverId||x?.id,kind:x?.type?'documents':'daily-logs'}):'';
  if(r&&r.action==='REJECT'&&x.status==='DRAFT')h+='<div class="review-note reject"><b>Yêu cầu chỉnh sửa, bổ sung</b> — '+esc(r.by||'')+' · '+esc(fmt(r.at))+'<br>'+esc(r.comment||'')+'</div>';
  else if(r&&r.action==='ESCALATE'&&x.status==='SUBMITTED')h+='<div class="review-note"><b>Trưởng TVGS đã trình công ty</b> — '+esc(r.by||'')+' · '+esc(fmt(r.at))+'<br>'+esc(r.comment||'')+'</div>';
  else if(r&&r.action==='APPROVE'&&r.comment)h+='<div class="review-note approve"><b>Ý kiến khi phê duyệt</b> — '+esc(r.by||'')+' · '+esc(fmt(r.at))+'<br>'+esc(r.comment)+'</div>';

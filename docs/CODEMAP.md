@@ -88,3 +88,7 @@ Selector hay dùng: `#loginScreen/#loginUsername/#loginPassword/#loginButton/#lo
 # Việc 5 — màn hình đối chiếu bản nhập
 
 `js/01-core.js`: `showConflictDrafts`, `compareConflictDraft`, `draftComparisonRows`, `retryPendingDraft`, `editRejectedDraft`, `draftIsNew`, `discardConflictDraft`. Bảng hai bản chỉ đọc; mã EDIT_CONFLICT tách khỏi từ chối dữ liệu; retry chỉ PENDING, không tự lấy row_version mới. `js/13-tong-quan.js` dẫn trực tiếp màn hình; `backend/tests/ui/cases/13-edit-conflicts.js` có thêm GD-V5. Chi tiết trước/sau: `docs/VIEC5-BAN-NHAP-DOI-CHIEU.md`.
+
+# Hồ sơ nhân sự công ty — MVP-05
+
+`js/17-ho-so-nhan-su.js` + trang `companyPeople`: hồ sơ/chứng chỉ/scan tập trung, phân công có xác nhận hết hạn, gợi ý gộp và tách lại. Chỉ ADMIN/DIRECTOR ghi; các vai trò còn lại xem. API `/api/company-personnel` → `backend/src/routes/companyPersonnel.js` → `backend/src/services/companyPersonnelService.js`; các đường nhân sự cũ dùng chứng chỉ từ hồ sơ. `migrations/20261009_company_personnel.sql`: chỉ tự ghép cùng user_id, giữ nguồn nhập, bản chụp chứng chỉ khi gửi duyệt/đóng biên bản. `backend/src/routes/certificateSnapshots.js` được đặt sau quyền bản ghi, DOWNLOAD cho scan. Kiểm thử `backend/tests/company-personnel.test.js` (DB `COMPANY_PERSONNEL_TEST_DB_URL`, cổng 3115), giao diện `cases/16-company-personnel.js`, thêm bước CI. Trước/sau và nghiệm thu: [HO-SO-NHAN-SU-CONG-TY.md](HO-SO-NHAN-SU-CONG-TY.md).

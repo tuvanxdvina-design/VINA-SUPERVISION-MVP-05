@@ -1,6 +1,6 @@
 const pool = require('../utils/db');
-const fileStore = require('./fileStore');
 const permissionService = require('./permissionService');
+const company = require('./companyPersonnelService');
 
 // Chuẩn hóa họ tên: NFC + bỏ khoảng trắng thừa. Dùng thống nhất ở mọi đường ghi.
 function cleanName(value) {
@@ -15,6 +15,15 @@ function httpError(status, message, code) {
 }
 
 class ProjectPersonnelService {
+  async enrich(rows) {
+    if(!rows.length)return rows;
+    const ids=rows.map(r=>r.personnel_id||r.id).filter(Boolean),users=rows.map(r=>r.user_id).filter(Boolean);
+    const profiles=(await pool.query(`SELECT pp.id pp_id,cp.id profile_id,cp.user_id,cp.full_name,
+      (SELECT COALESCE(jsonb_agg(c ORDER BY c.created_at,c.id),'[]'::jsonb) FROM personnel_certificates c WHERE c.personnel_id=cp.id AND c.deleted_at IS NULL) certificates
+      FROM company_personnel cp LEFT JOIN project_personnel pp ON pp.personnel_profile_id=cp.id
+      WHERE pp.id=ANY($1::uuid[]) OR cp.user_id=ANY($2::uuid[])`,[ids,users])).rows;
+    return rows.map(r=>{const p=profiles.find(p=>p.pp_id===(r.personnel_id||r.id))||profiles.find(p=>p.user_id&&p.user_id===r.user_id);return p?{...r,personnel_profile_id:p.profile_id,full_name:p.full_name,certificates:p.certificates,certificate:p.certificates.map(c=>c.certificate_type==='Chứng chỉ cũ'?c.certificate_number||'':[c.certificate_type,c.certificate_number,c.grade,c.field,c.expires_on?'Hết hạn: '+String(c.expires_on).slice(0,10):''].filter(Boolean).join(' · ')).join('; ')}:r});
+  }
   // ---------------------------------------------------------------------------
   // Danh sách hợp nhất: mỗi người MỘT dòng.
   //  - Dòng nhân sự (project_personnel), nếu có user_id thì gắn phân công tài khoản.
@@ -50,12 +59,14 @@ class ProjectPersonnelService {
                         WHERE pp.project_id = pm.project_id AND pp.user_id = pm.user_id AND pp.status = 'ACTIVE')
     `, [projectId]);
 
-    return result.rows.map(row => {
+    return (await this.enrich(result.rows)).map(row => {
       const linked = !!row.member_id;
       const eff = linked ? permissionService.effective(row.role_name, row.access_permissions, row.has_custom, row.assignment_title || row.member_title) : null;
       return {
         key: row.personnel_id ? 'p:' + row.personnel_id : 'm:' + row.member_id,
         personnel_id: row.personnel_id,
+        personnel_profile_id: row.personnel_profile_id,
+        certificates: row.certificates || [],
         member_id: row.member_id,
         user_id: row.user_id,
         full_name: row.full_name,
@@ -96,14 +107,15 @@ class ProjectPersonnelService {
 
   // Tra cứu nhân sự đã có ở BẤT KỲ công trình nào (không giới hạn 1 công trình) — dùng khi thêm nhân sự
   // mới ở công trình khác để chọn lại thay vì gõ tên mới mỗi lần (nhập liệu một chỗ, dùng nhiều nơi).
-  // Mỗi tên chỉ trả về 1 dòng (bản ghi cập nhật gần nhất), kèm chứng chỉ gần nhất để gợi ý điền sẵn.
+  // Return distinct identities, including separate people with the same name.
   async searchNames(q, limit = 20) {
     const query = String(q || '').trim();
     const result = await pool.query(`
-      SELECT DISTINCT ON (lower(full_name)) full_name, certificate, updated_at
-      FROM project_personnel
-      WHERE status = 'ACTIVE' AND ($1 = '' OR full_name ILIKE '%' || $1 || '%')
-      ORDER BY lower(full_name), updated_at DESC
+      SELECT cp.id personnel_profile_id,cp.full_name,cp.updated_at,
+       (SELECT string_agg(c.certificate_number,'; ' ORDER BY c.id) FROM personnel_certificates c WHERE c.personnel_id=cp.id AND c.deleted_at IS NULL) certificate
+      FROM company_personnel cp
+      WHERE cp.deleted_at IS NULL AND cp.merged_into IS NULL AND ($1 = '' OR cp.full_name ILIKE '%' || $1 || '%')
+      ORDER BY cp.full_name,cp.id
       LIMIT $2
     `, [query, Math.min(Math.max(Number(limit) || 20, 1), 50)]);
     return result.rows;
@@ -117,44 +129,38 @@ class ProjectPersonnelService {
       WHERE project_id = $1 AND status = 'ACTIVE'
       ORDER BY full_name ASC
     `, [projectId]);
-    return result.rows;
+    return this.enrich(result.rows);
   }
 
   async getById(id) {
     const result = await pool.query('SELECT * FROM project_personnel WHERE id = $1', [id]);
-    return result.rows[0];
+    return (await this.enrich(result.rows))[0];
   }
 
   async listFiles(personnelId) {
-    return (await pool.query(`SELECT id, category, file_name, file_type, file_size, uploaded_at
-      FROM project_personnel_files WHERE personnel_id=$1 ORDER BY uploaded_at, id`, [personnelId])).rows;
+    return (await pool.query(`SELECT f.id,'CERTIFICATE' category,f.file_name,f.file_type,f.file_size,f.uploaded_at,c.id certificate_id
+      FROM project_personnel pp JOIN personnel_certificates c ON c.personnel_id=pp.personnel_profile_id JOIN personnel_certificate_files f ON f.certificate_id=c.id
+      WHERE pp.id=$1 AND c.deleted_at IS NULL AND f.deleted_at IS NULL ORDER BY f.uploaded_at,f.id`,[personnelId])).rows;
   }
 
   async addFile(personnel, category, name, type, buffer, userId) {
-    const stored = await fileStore.put(buffer);
-    return (await pool.query(`INSERT INTO project_personnel_files
-      (personnel_id, project_id, category, file_name, file_type, file_size, sha256, storage_key, uploaded_by)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      ON CONFLICT (personnel_id, sha256) DO UPDATE SET file_name=EXCLUDED.file_name, category=EXCLUDED.category
-      RETURNING id, category, file_name, file_type, file_size, uploaded_at, (xmax=0) AS created`,
-    [personnel.id, personnel.project_id, category, name, type, buffer.length, stored.sha256, stored.storageKey, userId])).rows[0];
+    let certificate=(await pool.query('SELECT id FROM personnel_certificates WHERE personnel_id=$1 AND deleted_at IS NULL ORDER BY created_at,id LIMIT 1',[personnel.personnel_profile_id])).rows[0];
+    if(!certificate)certificate=await company.saveCertificate(personnel.personnel_profile_id,null,{certificate_type:'Chứng chỉ cũ'},userId);
+    return company.addFile(certificate.id,name,type,buffer,userId);
   }
 
   async getFile(personnelId, fileId) {
-    const row = (await pool.query('SELECT file_name,file_type,storage_key FROM project_personnel_files WHERE personnel_id=$1 AND id=$2', [personnelId, fileId])).rows[0];
-    if (!row) return null;
-    const buffer = await fileStore.get(row.storage_key);
-    return buffer ? { name: row.file_name, type: row.file_type, buffer } : null;
+    const row=(await this.listFiles(personnelId)).find(f=>f.id===fileId);return row?company.getFile(row.certificate_id,fileId):null;
   }
 
-  async removeFile(personnelId, fileId) {
-    const row = (await pool.query('DELETE FROM project_personnel_files WHERE personnel_id=$1 AND id=$2 RETURNING id, file_name', [personnelId, fileId])).rows[0];
+  async removeFile(personnelId, fileId,actorId) {
+    const row=(await this.listFiles(personnelId)).find(f=>f.id===fileId);
     if (!row) throw httpError(404, 'Không tìm thấy tệp chứng chỉ');
+    await company.removeFile(row.certificate_id,fileId,actorId);
     return row;
   }
 
-  // Thêm/cập nhật theo ID; nếu ID mới nhưng trùng tên (đã chuẩn hóa) thì cập nhật dòng cũ
-  // thay vì tạo dòng thứ hai.
+  // Retry by stable ID; reuse only an explicitly selected profile or the same user_id.
   async upsert(data) {
     const fullName = cleanName(data.full_name);
     const title = String(data.assignment_title || '').trim();
@@ -169,15 +175,16 @@ class ProjectPersonnelService {
         )).rows[0];
         matchedById = !!existing;
       }
-      if (!existing) {
+      if (!existing && (data.user_id||data.personnel_profile_id)) {
         existing = (await client.query(
-          `SELECT * FROM project_personnel WHERE project_id = $1 AND status = 'ACTIVE' AND lower(full_name) = lower($2) FOR UPDATE`,
-          [data.project_id, fullName]
+          `SELECT * FROM project_personnel WHERE project_id = $1 AND status = 'ACTIVE' AND (user_id=$2::uuid OR personnel_profile_id=$3::uuid) FOR UPDATE`,
+          [data.project_id,data.user_id||null,data.personnel_profile_id||null]
         )).rows[0];
       }
+      if(existing&&data.personnel_profile_id&&existing.personnel_profile_id!==data.personnel_profile_id)throw httpError(409,'Tài khoản đã được phân công bằng hồ sơ khác; hãy kiểm tra Gợi ý gộp');
       let row;
       if (existing) {
-        // Khớp theo ID = sửa có chủ đích → ghi đè. Khớp theo tên = người đã có → chỉ bổ sung ô còn trống,
+        // Khớp theo ID = sửa có chủ đích. Khớp danh tính = chỉ bổ sung ô còn trống,
         // không ghi đè dữ liệu mới hơn trên máy chủ bằng bản cũ từ thiết bị.
         row = (await client.query(matchedById ? `
           UPDATE project_personnel
@@ -199,11 +206,13 @@ class ProjectPersonnelService {
         // (mở từ dòng "chỉ có tài khoản" ở trang Nhân sự), phải gắn luôn user_id để hợp nhất một dòng,
         // không tạo dòng nhân sự trùng tách biệt với phân công tài khoản đã có.
         row = (await client.query(`
-          INSERT INTO project_personnel (id, project_id, full_name, assignment_title, certificate, status, created_by, user_id, bidding_package_id)
-          VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, NULLIF($5, ''), 'ACTIVE', $6, $7::uuid, $8::uuid)
+          INSERT INTO project_personnel (id, project_id, full_name, assignment_title, certificate, status, created_by, user_id, bidding_package_id,personnel_profile_id)
+          VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, NULLIF($5, ''), 'ACTIVE', $6, $7::uuid, $8::uuid,$9::uuid)
           RETURNING *
-        `, [data.id || null, data.project_id, fullName, title, data.certificate || '', data.created_by, data.user_id || null, data.bidding_package_id || null])).rows[0];
+        `, [data.id || null, data.project_id, fullName, title, data.certificate || '', data.created_by, data.user_id || null, data.bidding_package_id || null,data.personnel_profile_id||null])).rows[0];
       }
+      await company.acknowledge(client,row.personnel_profile_id,data,data.created_by,row.project_id);
+      if(data.company_assignment===true&&row.user_id)await this.upsertMember(client,row.project_id,await this.activeUser(client,row.user_id),row.assignment_title,data.created_by,row.bidding_package_id);
       const replaced = await this.ensureSingleLead(client, row.project_id, row.assignment_title,
         { personnelId: row.id, userId: row.user_id, replaceLead: data.replace_lead === true });
       await this.syncMemberTitle(client, row);
@@ -234,6 +243,7 @@ class ProjectPersonnelService {
       `, [cleanName(data.full_name), String(data.assignment_title || '').trim(),
           data.certificate === undefined ? null : String(data.certificate), id,
           data.bidding_package_id !== undefined, data.bidding_package_id || null])).rows[0];
+      if(row)await company.acknowledge(client,row.personnel_profile_id,data,data.actorId,row.project_id);
       const replaced = row ? await this.ensureSingleLead(client, row.project_id, row.assignment_title,
         { personnelId: row.id, userId: row.user_id, replaceLead: data.replace_lead === true }) : [];
       if (row) await this.syncMemberTitle(client, row);
@@ -331,14 +341,16 @@ class ProjectPersonnelService {
   }
 
   // Phân công tài khoản vào công trình (luồng "Phân công mới").
-  // Không tạo dòng nhân sự thứ hai nếu đã có người cùng tên chưa liên kết → liên kết luôn.
-  async assignAccount({ project_id, user_id, assignment_title, access_permissions, work_scope, bidding_package_id, actorId }) {
+  // An unlinked namesake is a separate identity; never infer identity from a name.
+  async assignAccount({ project_id, user_id, assignment_title, access_permissions, work_scope, bidding_package_id, actorId,expired_certificates_ack }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const project = (await client.query('SELECT id FROM projects WHERE id = $1', [project_id])).rows[0];
       if (!project) throw httpError(404, 'Công trình chưa có trên máy chủ (có thể chưa đồng bộ)');
       const user = await this.activeUser(client, user_id);
+      const existingProfile=(await client.query('SELECT id FROM company_personnel WHERE user_id=$1',[user_id])).rows[0];
+      if(existingProfile)await company.acknowledge(client,existingProfile.id,{expired_certificates_ack},actorId,project_id);
       const title = String(assignment_title || '').trim();
       const roleName = (await client.query('SELECT name FROM roles WHERE id = $1', [user.role_id])).rows[0]?.name;
       if (['MANAGER', 'ADMIN', 'DIRECTOR'].includes(roleName)) {
@@ -353,13 +365,6 @@ class ProjectPersonnelService {
         `SELECT * FROM project_personnel WHERE project_id = $1 AND user_id = $2 AND status = 'ACTIVE' FOR UPDATE`,
         [project_id, user_id]
       )).rows[0];
-      if (!personnel) {
-        personnel = (await client.query(
-          `SELECT * FROM project_personnel WHERE project_id = $1 AND status = 'ACTIVE' AND user_id IS NULL
-             AND lower(full_name) = lower($2) FOR UPDATE`,
-          [project_id, cleanName(user.full_name)]
-        )).rows[0];
-      }
       if (personnel) {
         personnel = (await client.query(`
           UPDATE project_personnel SET user_id = $1,
@@ -389,7 +394,7 @@ class ProjectPersonnelService {
   }
 
   // Liên kết một nhân sự có sẵn với tài khoản (từ danh sách nhân sự).
-  async linkAccount(personnelId, { user_id, access_permissions, work_scope, actorId }) {
+  async linkAccount(personnelId, { user_id, access_permissions, work_scope, actorId,expired_certificates_ack }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -397,6 +402,7 @@ class ProjectPersonnelService {
         `SELECT * FROM project_personnel WHERE id = $1 AND status = 'ACTIVE' FOR UPDATE`, [personnelId]
       )).rows[0];
       if (!personnel) throw httpError(404, 'Không tìm thấy nhân sự công trình');
+      await company.acknowledge(client,personnel.personnel_profile_id,{expired_certificates_ack},actorId,personnel.project_id);
       const user = await this.activeUser(client, user_id);
       const other = (await client.query(
         `SELECT id FROM project_personnel WHERE project_id = $1 AND user_id = $2 AND status = 'ACTIVE' AND id <> $3`,
