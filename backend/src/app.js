@@ -85,6 +85,7 @@ app.use('/api/documents', require('./routes/documents'));
 app.use('/api/issues', require('./routes/issues'));
 app.use('/api/project-members', require('./routes/projectMembers'));
 app.use('/api/project-personnel', require('./routes/projectPersonnel'));
+app.use('/api/company-personnel', require('./routes/companyPersonnel'));
 app.use('/api/bidding-packages', require('./routes/biddingPackages'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/reviews', require('./routes/reviews'));

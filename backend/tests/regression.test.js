@@ -55,6 +55,7 @@ test('health: đúng phiên bản, không còn migration chờ', async () => {
   const h = await (await fetch(BASE + '/health')).json();
   const build = fs.readFileSync(path.join(ROOT, 'backend/src/build.js'), 'utf8').match(/BUILD:\s*'([^']+)'/)[1];
   assert.equal(h.build, build);
+  assert.deepEqual(h.migrations_pending, []);
   // APP_BUILD nằm trong index.html (trước khi tách) hoặc trong một tệp js/ (sau khi tách).
   const jsDir = path.join(ROOT, 'js');
   const nguonGiaoDien = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
@@ -81,12 +82,12 @@ test('migration: nhật ký cũ được gán ca, MORNING → CA1, không trùng
   assert.equal(psql(`SELECT is_nullable FROM information_schema.columns WHERE table_name='daily_logs' AND column_name='shift'`), 'NO');
 });
 
-test('nhân sự: thêm trùng tên (khác dấu/hoa thường) không tạo dòng mới', async () => {
+test('nhân sự: cùng tên không tự ghép danh tính khi chưa có tài khoản', async () => {
   const before = (await api('GET', `/project-personnel/project/${P['001']}/team`)).body.length;
   const r = await api('POST', '/project-personnel', { project_id: P['001'], full_name: '  trần  văn c '.normalize('NFD'), assignment_title: 'GS viên' });
-  assert.equal(r.status, 200);
+  assert.equal(r.status, 201);
   const after = (await api('GET', `/project-personnel/project/${P['001']}/team`)).body;
-  assert.equal(after.length, before);
+  assert.equal(after.length, before + 1);
   assert.ok(after.some(x => x.full_name === 'Trần Văn C'), 'giữ nguyên cách viết họ tên đã có');
 });
 

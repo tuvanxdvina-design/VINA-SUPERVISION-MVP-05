@@ -8,7 +8,7 @@ const TYPE_CODES = { HS: 'Hồ sơ pháp lý', BB: 'Biên bản', NK: 'Nhật k�
 
 const LIST_SQL = `
   SELECT d.id, d.project_id, d.type, d.auto_code, d.name, d.status, d.version, d.row_version, d.doc_group, d.details,
-         d.is_adjustment_of, d.created_by, d.created_at, d.updated_at, d.approved_at, d.locked_at, d.submitted_at,
+         d.is_adjustment_of, d.created_by, d.created_at, d.updated_at, d.approved_at, d.locked_at, d.submitted_at,d.personnel_certificate_snapshot,
          ${lastReviewSql('documents', 'd')} AS last_review,
          COALESCE(d.author_name, u.full_name) AS created_by_name, up.full_name AS updated_by_name, a.full_name AS approved_by_name,
          COALESCE((SELECT json_agg(json_build_object('id', f.id, 'category', f.category, 'file_name', f.file_name,

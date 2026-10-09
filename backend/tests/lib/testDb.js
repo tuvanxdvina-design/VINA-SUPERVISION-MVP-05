@@ -87,6 +87,9 @@ function createTestDb(dbUrl) {
     psql(`CREATE TABLE IF NOT EXISTS project_member_access (project_member_id uuid PRIMARY KEY REFERENCES project_members(id) ON DELETE CASCADE, access_permissions jsonb NOT NULL DEFAULT '["VIEW"]'::jsonb, work_scope text, updated_at timestamptz NOT NULL DEFAULT NOW())`);
     seedRealisticMess();
     for (const f of all.filter(f => f >= '20260926')) psqlFile(path.join(ROOT, 'migrations', f));
+    // Mirror migrate-db.ps1: /health must report the same applied files in isolated tests.
+    psql('CREATE TABLE IF NOT EXISTS schema_migrations(file_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT NOW())');
+    psql('INSERT INTO schema_migrations(file_name) VALUES '+all.map(f=>"('"+f+"')").join(',')+' ON CONFLICT DO NOTHING');
   }
 
   function startServer({ port }) {
@@ -94,6 +97,7 @@ function createTestDb(dbUrl) {
       cwd: path.join(ROOT, 'backend'),
       env: {
         ...process.env, PORT: String(port), HOST: '127.0.0.1', NODE_ENV: 'development',
+        JWT_SECRET: require('crypto').randomBytes(48).toString('hex'),
         DB_HOST: u.hostname, DB_PORT: u.port || '5432',
         DB_USER: decodeURIComponent(u.username), DB_PASSWORD: decodeURIComponent(u.password), DB_NAME: dbName
       },

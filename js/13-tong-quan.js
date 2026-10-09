@@ -1,4 +1,5 @@
 function renderDashboard(){
+if(typeof loadCompanyCertificateSummary==='function')void loadCompanyCertificateSummary(false);
 document.getElementById('kProjects').textContent=db.projects.length;document.getElementById('kLogs').textContent=db.logs.length;
 document.getElementById('kIssues').textContent=db.issues.filter(x=>x.status!=='ĐÃ ĐÓNG').length;document.getElementById('kDocs').textContent=db.docs.filter(x=>x.status==='APPROVED'||x.status==='LOCKED').length;
 let st={};db.projects.forEach(p=>st[p.status]=(st[p.status]||0)+1);document.getElementById('projectStats').innerHTML=Object.entries(st).map(([k,v])=>`<p>${esc(k)}: <b>${v}</b></p>`).join('')||'<span class="muted">&#x43;h&#x01b0;a c&#x00f3; d&#x1eef; li&#x1ec7;u</span>';

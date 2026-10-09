@@ -93,10 +93,10 @@ class DailyLogService {
   async submitDailyLog(id, created_by) {
     const result = await pool.query(`
       UPDATE daily_logs
-      SET status = 'SUBMITTED', submitted_at = NOW(), version = version + 1
+      SET status = 'SUBMITTED', submitted_at = NOW(), version = version + 1,certificate_snapshot_by=$2
       WHERE id = $1 AND status = 'DRAFT'
       RETURNING *, TO_CHAR(log_date, 'YYYY-MM-DD') AS log_date_text
-    `, [id]);
+    `, [id,created_by]);
     return result.rows[0];
   }
 
@@ -116,7 +116,7 @@ class DailyLogService {
   async confirmDailyLog(id, approved_by) {
     const result = await pool.query(`
       UPDATE daily_logs
-      SET status = 'APPROVED', submitted_at = NOW(), approved_by = $1, approved_at = NOW()
+      SET status = 'APPROVED', submitted_at = NOW(), approved_by = $1, approved_at = NOW(),certificate_snapshot_by=$1
       WHERE id = $2 AND status = 'DRAFT'
       RETURNING *, TO_CHAR(log_date, 'YYYY-MM-DD') AS log_date_text
     `, [approved_by, id]);

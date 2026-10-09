@@ -78,7 +78,7 @@ async function dump(page, name) {
 }
 
 function uiTest(name, fn, options = {}) {
-  test(name, async () => {
+  test(name, {timeout:120000}, async () => {
     const page = await newPage(name, options);
     try {
       await fn(page);

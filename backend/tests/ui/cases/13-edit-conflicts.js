@@ -297,6 +297,7 @@ module.exports = function register() {
     const target=targets.find(x=>x.type==='project');
     const record=await fixture(api,target,pid,'inflight-project');
     await openFixture(page,target,record);await page.fill('#fname','Lần lưu thứ nhất');
+    await page.waitForFunction(()=>!projectSyncRunning&&!automaticSyncRunning);
     let ready,release;const held=new Promise(resolve=>{ready=resolve});const gate=new Promise(resolve=>{release=resolve});
     let intercepted=false;
     await page.route('**/api/projects/'+record.id,async route=>{
@@ -304,7 +305,8 @@ module.exports = function register() {
       intercepted=true;const response=await route.fetch();ready();await gate;await route.fulfill({response});
     });
     try{
-      await page.evaluate(id=>{window.__firstSave=saveProject(id)},record.id);await held;
+      await page.evaluate(id=>{window.__firstSave=saveProject(id)},record.id);
+      let timer;try{await Promise.race([held,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Không nhận được PATCH đầu tiên trong 25 giây')),25000)})])}finally{clearTimeout(timer)}
       await page.fill('#fname','Nội dung lần hai cần giữ');
       await page.evaluate(id=>saveProject(id),record.id);
     }finally{release()}

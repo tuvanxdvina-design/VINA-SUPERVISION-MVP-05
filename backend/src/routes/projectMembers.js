@@ -11,7 +11,7 @@ router.use(auth.verifyToken);
 const managers = [rbac.ROLES.ADMIN, rbac.ROLES.DIRECTOR];
 
 function sendError(res, err) {
-  if (err.status) return res.status(err.status).json({ error: err.message, code: err.code });
+  if (err.status) return res.status(err.status).json({ error: err.message, code: err.code,details:err.details });
   if (err.code === '23503') return res.status(404).json({ error: 'Công trình hoặc tài khoản không tồn tại trên máy chủ' });
   console.error('project-members:', err.message);
   return res.status(500).json({ error: 'Không xử lý được phân công' });
@@ -65,7 +65,7 @@ router.put('/:id', rbac.checkRole(managers), async (req, res) => {
     const accessError = validateAccessFields(req.body);
     if (accessError) return res.status(400).json({ error: accessError });
     const before = await projectMemberService.getMemberById(req.params.id);
-    const member = await projectMemberService.updateMember(req.params.id, req.body);
+    const member = await projectMemberService.updateMember(req.params.id, req.body,req.user.userId);
     if (!member) return res.status(404).json({ error: 'Không tìm thấy phân công đang hoạt động' });
     await req.audit('project_members', member.id, 'UPDATE_ACCESS', before, member, req.user.userId);
     res.json(member);

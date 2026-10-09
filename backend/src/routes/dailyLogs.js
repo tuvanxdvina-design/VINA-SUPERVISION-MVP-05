@@ -101,6 +101,8 @@ router.use('/:id', async (req, res, next) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.use('/:id/certificate-snapshots',require('./certificateSnapshots')('daily_logs'));
+
 // GET /api/daily-logs?project_id=xxx&status=xxx
 router.get('/', access.query, async (req, res) => {
   try {

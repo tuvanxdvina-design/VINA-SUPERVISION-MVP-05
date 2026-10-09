@@ -13,8 +13,9 @@ router.use(auth.verifyToken);
 const managers = [rbac.ROLES.ADMIN, rbac.ROLES.DIRECTOR];
 
 function sendError(res, error) {
-  if (error.status) return res.status(error.status).json({ error: error.message, code: error.code });
+  if (error.status) return res.status(error.status).json({ error: error.message, code: error.code,details:error.details });
   if (error.code === '23503') return res.status(404).json({ error: 'Công trình hoặc tài khoản không tồn tại trên máy chủ' });
+  if (error.code === 'P2001') return res.status(409).json({ error: 'Hồ sơ đã xóa/gộp hoặc thuộc tài khoản khác. Hãy kiểm tra hồ sơ nhân sự công ty.' });
   console.error('project-personnel:', error.message);
   return res.status(500).json({ error: 'Không xử lý được nhân sự công trình' });
 }
@@ -52,6 +53,7 @@ router.get('/project/:projectId/team', access.projectParam, async (req, res) => 
     res.json(rows.map(r => r.user_id === req.user.userId ? { ...r, is_me: true } : {
       key: r.key, personnel_id: r.personnel_id, full_name: r.full_name, assignment_title: r.assignment_title,
       certificate: r.certificate, role_name: r.role_name, account_status: r.account_status === 'LINKED' ? 'LINKED' : 'NO_ACCOUNT',
+      personnel_profile_id:r.personnel_profile_id,certificates:r.certificates,
       access_permissions: [], permission_source: 'HIDDEN'
     }));
   }
@@ -107,7 +109,7 @@ router.put('/:id', rbac.checkRole(managers), loadPersonnel, async (req, res) => 
     const effectivePackageId = req.body.bidding_package_id !== undefined ? req.body.bidding_package_id : req.personnel.bidding_package_id;
     const packageError = await validatePackageAssignment(req.personnel.project_id, effectivePackageId || null);
     if (packageError) return res.status(400).json({ error: packageError });
-    const { row, replaced } = await service.update(req.params.id, req.body);
+    const { row, replaced } = await service.update(req.params.id, {...req.body,actorId:req.user.userId});
     await req.audit('project_personnel', row.id, 'UPDATE', req.personnel, row, req.user.userId);
     await auditLeadTransfer(req, replaced, row);
     res.json(row);
@@ -168,7 +170,7 @@ router.get('/:id/files/:fileId', loadPersonnel, (req, res, next) => {
 
 router.delete('/:id/files/:fileId', rbac.checkRole(managers), loadPersonnel, async (req, res) => {
   try {
-    const row = await service.removeFile(req.params.id, req.params.fileId);
+    const row = await service.removeFile(req.params.id, req.params.fileId,req.user.userId);
     await req.audit('project_personnel_files', row.id, 'DELETE', { personnel_id: req.params.id, name: row.file_name }, null, req.user.userId);
     res.json({ ok: true });
   } catch (error) { sendError(res, error); }

@@ -27,6 +27,7 @@ function detailsError(details) {
 
 router.use(authMiddleware.verifyToken);
 router.use('/:id', access.record('issues'));
+router.use('/:id/certificate-snapshots',require('./certificateSnapshots')('issues'));
 
 // GET /api/issues?project_id=xxx&status=xxx
 router.get('/', access.query, async (req, res) => {

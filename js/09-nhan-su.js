@@ -11,7 +11,7 @@ async function syncProjectPersonnel(projectId){
  let changed=false;
  for(const person of pending){
   try{
-   await apiRequest('/project-personnel',{method:'POST',body:JSON.stringify({project_id:projectId,full_name:cleanPersonName(person.name),assignment_title:person.role,certificate:person.certs||''})});
+   await apiRequest('/project-personnel',{method:'POST',body:JSON.stringify({project_id:projectId,full_name:cleanPersonName(person.name),assignment_title:person.role,id:person.id,certificate:person.certs||''})});
    db.people=db.people.filter(x=>x.id!==person.id);changed=true; // đã lên máy chủ: máy chủ là nguồn chuẩn
   }catch(error){person.lastError=error.message;console.warn('Chưa đồng bộ được nhân sự công trình:',error.message)}
  }
@@ -70,13 +70,8 @@ function titleSelectHtml(prefix,value){
  return '<select id="'+prefix+'Title" onchange="document.getElementById(\''+prefix+'TitleOther\').style.display=this.value===\'Khác\'?\'\':\'none\'">'+TITLE_OPTIONS.map(o=>'<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select><input id="'+prefix+'TitleOther" maxlength="120" placeholder="Nhập chức danh khác" style="margin-top:6px;display:'+(sel==='Khác'?'':'none')+'" value="'+esc(sel==='Khác'?v:'')+'">';
 }
 function readTitle(prefix){const s=document.getElementById(prefix+'Title')?.value||'';return s==='Khác'?(document.getElementById(prefix+'TitleOther')?.value||'').trim():s}
-// Chọn đúng tên gợi ý (nhân sự đã có ở công trình khác) → điền sẵn chứng chỉ nếu ô chứng chỉ đang trống,
-// để khỏi gõ lại — chức danh tại công trình này vẫn do người dùng tự chọn/sửa riêng.
-function onTeamNameInput(input){
- const match=(window.__tmNameSuggestions||[]).find(n=>n.full_name.toLocaleLowerCase('vi')===String(input.value||'').trim().toLocaleLowerCase('vi'));
- const certInput=document.getElementById('tmCert');
- if(match&&certInput&&!certInput.value.trim()&&match.certificate)certInput.value=match.certificate;
-}
+// Họ tên không chứng minh danh tính. Hồ sơ có sẵn được chọn rõ ràng bằng mã hồ sơ.
+function onTeamNameInput(){}
 // Đổi chức danh trong cửa sổ → cập nhật quyền mặc định hiển thị (Trưởng TVGS tại công trình = có quyền Duyệt)
 function refreshPermDefaults(){
  const span=document.getElementById('tmDefaultsText');if(!span)return;
@@ -151,17 +146,17 @@ async function openTeamMember(encodedKey,pid){
  const packageField=packages.length?'<div><label>Gói thầu phụ trách <span style="color:#b42318">*</span></label><select id="tmPackage"><option value="">— Chọn gói thầu —</option>'+packages.map(pk=>'<option value="'+pk.id+'"'+(pk.id===r?.bidding_package_id?' selected':'')+'>'+esc(pk.name)+'</option>').join('')+'</select><div class="muted">Công trình này có nhiều gói thầu — bắt buộc ấn định đúng 1 gói mà người này phụ trách.</div></div>':'';
  // Thêm mới (chưa có r): gợi ý chọn từ nhân sự đã có ở công trình khác thay vì luôn gõ tên mới.
  let nameSuggestions=[];
- if(!r&&canManageAssignments()){try{nameSuggestions=await apiRequest('/project-personnel/search?limit=50')}catch(_){nameSuggestions=[]}}
+ if(!r&&canManageAssignments()){try{nameSuggestions=await apiRequest('/company-personnel')}catch(_){nameSuggestions=[]}}
  window.__tmNameSuggestions=nameSuggestions;
  const nameFieldHtml=!r
-  ?'<div><label>Họ tên <span class="muted" style="font-weight:400">(gõ mới hoặc chọn người đã có ở công trình khác)</span></label><input id="tmName" maxlength="255" list="tmNameSuggest" value="" oninput="onTeamNameInput(this)" autocomplete="off"><datalist id="tmNameSuggest">'+nameSuggestions.map(n=>'<option value="'+esc(n.full_name)+'">').join('')+'</datalist></div>'
-  :'<div><label>Họ tên</label><input id="tmName" maxlength="255" value="'+esc(r?.full_name||'')+'"'+(isMemberOnly?' disabled title="Lấy theo tên tài khoản"':'')+'></div>';
+  ?'<div><label>Chọn hồ sơ công ty đã có</label><select id="tmCompanyProfile" onchange="if(this.value)openCompanyAssignment(this.value,\''+pid+'\')"><option value="">— Hoặc nhập người mới bên dưới —</option>'+nameSuggestions.map(n=>'<option value="'+n.id+'">'+esc(n.full_name+' — '+(n.username||'chưa có tài khoản')+' — '+n.id.slice(0,8))+'</option>').join('')+'</select><label>Họ tên người mới</label><input id="tmName" maxlength="255" value="" autocomplete="off"></div>'
+  :'<div><label>Họ tên (từ hồ sơ công ty)</label><input id="tmName" maxlength="255" value="'+esc(r?.full_name||'')+'" readonly>'+(r.personnel_profile_id?'<button type="button" onclick="viewCompanyProfile(\''+r.personnel_profile_id+'\')">Xem / sửa hồ sơ công ty</button>':'')+'</div>';
  const info='<div class="row">'
   +nameFieldHtml
   +'<div><label>Chức danh tại công trình (công việc được giao)</label>'+titleSelectHtml('tm',r?.assignment_title||'')+'</div>'
   +packageField
-  +'<div class="full"><label>Chứng chỉ</label><input id="tmCert" value="'+esc(r?.certificate||'')+'"></div>'
-  +'<div class="full"><label>Bản chụp/scan chứng chỉ (chọn được nhiều tệp)</label><input id="tmCertFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple><div id="tmCertFiles" class="muted">'+(r?.personnel_id?'Đang tải...':'Tệp sẽ được lưu tập trung sau khi lưu.')+'</div></div>'+'</div>';
+  +'<div class="full"><label>Chứng chỉ'+(r?' (từ hồ sơ công ty)':' cũ / thông tin ban đầu')+'</label><input id="tmCert" value="'+esc(r?.certificate||'')+'"'+(r?' readonly':'')+'></div>'
+  +'<div class="full"><label>Bản chụp/scan chứng chỉ (chọn được nhiều tệp)</label>'+(r?'<p class="muted">Thêm/sửa chứng chỉ và scan tại hồ sơ công ty.</p>':'<input id="tmCertFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple>')+'<div id="tmCertFiles" class="muted">'+(r?.personnel_id?'Đang tải...':'Tệp sẽ được lưu tập trung sau khi lưu.')+'</div></div>'+'</div>';
  let account='';
  if(r&&r.account_status==='LINKED'){
   const mismatch=r.account_name&&cleanPersonName(r.account_name).toLocaleLowerCase('vi')!==cleanPersonName(r.full_name).toLocaleLowerCase('vi');
@@ -194,7 +189,6 @@ async function saveTeamMember(encodedKey,pid){
  const certFiles=[...(document.getElementById('tmCertFile')?.files||[])];const bigCert=certFiles.find(f=>f.size>15*1024*1024);if(bigCert)return say('Tệp "'+bigCert.name+'" vượt 15 MB.');
  if(!name)return say('Nhập họ tên.');if(!title)return say('Chọn hoặc nhập chức danh tại công trình.');
  if(packageSelect&&!packageId)return say('Công trình này đã khai báo Gói thầu — hãy chọn gói thầu phụ trách cho nhân sự này.');
- if(!r){const dup=(teamRowsByProject[pid]||[]).find(x=>cleanPersonName(x.full_name).toLocaleLowerCase('vi')===name.toLocaleLowerCase('vi'));if(dup)return say('Đã có "'+dup.full_name+'" trong danh sách công trình. Đóng cửa sổ này và bấm vào tên đó để sửa.')}
  const perm=readPermEditor();const accType=document.getElementById('tmAccType')?.value||'';const accMode=document.querySelector('input[name="tmAccMode"]:checked')?.value||'';
  let accountId=accType&&accMode==='EXISTING'?(document.getElementById('tmAccount')?.value||''):'';
  const newAccount=accType&&accMode==='NEW'?{username:(document.getElementById('tmNewUsername')?.value||'').trim().toLowerCase(),password:document.getElementById('tmNewPassword')?.value||'',role_name:accType}:null;
@@ -214,8 +208,8 @@ async function saveTeamMember(encodedKey,pid){
   {
    const body={project_id:pid,full_name:name,assignment_title:title,certificate:cert,bidding_package_id:packageId||null};
    if(r&&!r.personnel_id&&r.user_id)body.user_id=r.user_id;
-   const send=b=>r?.personnel_id?apiRequest('/project-personnel/'+encodeURIComponent(r.personnel_id),{method:'PUT',body:JSON.stringify(b)})
-            :apiRequest('/project-personnel',{method:'POST',body:JSON.stringify(b)});
+   else if(!r&&accountId)body.user_id=accountId;
+   const send=b=>companyAssignmentRequest(r?.personnel_id?'/project-personnel/'+encodeURIComponent(r.personnel_id):'/project-personnel',b);
    let row;
    try{row=await send(body)}
    catch(error){
@@ -235,7 +229,7 @@ async function saveTeamMember(encodedKey,pid){
    await apiRequest('/project-members/'+encodeURIComponent(r.member_id),{method:'PUT',body:JSON.stringify(body)});
   }else if((accountId||newAccount)&&personnelId){
    if(newAccount){const u=await apiRequest('/users',{method:'POST',body:JSON.stringify({...newAccount,full_name:name})});accountId=u.id;assignmentUsers.push(u);createdSlip={fullName:name,username:u.username,password:newAccount.password,role:ROLE_LABELS[u.role_name]||u.role_name,project:(db.projects||[]).find(x=>x.id===pid)?.name||'',title};say('Đã tạo tài khoản '+u.username+'. Đang cấp quyền...')}
-   await apiRequest('/project-personnel/'+encodeURIComponent(personnelId)+'/link-account',{method:'POST',body:JSON.stringify({user_id:accountId,...perm})});
+   await companyAssignmentRequest('/project-personnel/'+encodeURIComponent(personnelId)+'/link-account',{user_id:accountId,...perm});
   }
   audit(r?'UPDATE':'CREATE','project_personnel',personnelId||r?.member_id||'',name+' — '+title);save();
   closeModal();await refreshTeamViews(pid);
@@ -292,7 +286,7 @@ async function addAssignment(){
  const existing=(teamRowsByProject[project_id]||[]).find(r=>r.user_id===user_id&&r.account_status==='LINKED');
  if(existing){message.textContent='Tài khoản '+user.username+' đã được phân công ('+existing.full_name+'). Bấm vào tên trong danh sách để sửa quyền.';return}
  try{
-  await apiRequest('/project-members',{method:'POST',body:JSON.stringify({project_id,user_id,assignment_title})});
+  await companyAssignmentRequest('/project-members',{project_id,user_id,assignment_title});
   message.textContent='Đã phân công tài khoản '+user.username+(assignment_title?' — '+assignment_title:'')+'. Quyền đang theo mặc định vai trò; bấm vào tên để tùy chỉnh.';
   document.getElementById('assignmentTitle').value='';
   await refreshTeamViews(project_id);

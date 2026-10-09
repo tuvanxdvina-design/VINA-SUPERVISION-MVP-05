@@ -223,6 +223,7 @@ function mapDailyLogFromApi(log) {
     approvedBy: log.approved_by_name || log.approved_by || '',
     approvedAt: log.approved_at || '',
     lockedAt: log.locked_at || '',
+    personnelCertificateSnapshot: log.personnel_certificate_snapshot || null,
     lastReview: log.last_review || null,
     photoCount: Number(log.photo_count || 0)
   };
@@ -239,6 +240,7 @@ function mapDocumentFromApi(doc) {
     version: Number(doc.version || 1), status: doc.status || 'DRAFT',
     createdBy: doc.created_by_name || '', createdById: doc.created_by || '', updatedBy: doc.updated_by_name || '',
     createdAt: doc.created_at || '', updatedAt: doc.updated_at || '',
+    personnelCertificateSnapshot: doc.personnel_certificate_snapshot || null,
     submittedAt: doc.submitted_at || '', lastReview: doc.last_review || null,
     files: (Array.isArray(doc.files) ? doc.files : []).map(f => ({ id: f.id, category: f.category, name: f.file_name, type: f.file_type, size: Number(f.file_size || 0), uploadedAt: f.uploaded_at }))
   };
@@ -673,6 +675,7 @@ function mapIssueFromApi(issue) {
     serverId: issue.id,
     ...details,
     rowVersion: issue.row_version == null ? null : Number(issue.row_version),
+    personnelCertificateSnapshot: issue.personnel_certificate_snapshot || null,
     code: issue.issue_code || ('VĐ-' + issue.id.slice(0, 8)),
     projectId: issue.project_id,
     title: issue.title || details.title || '',

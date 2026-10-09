@@ -46,12 +46,14 @@ class ProjectMemberService {
       assignment_title: data.assignment_title,
       access_permissions: data.access_permissions,
       work_scope: data.work_scope,
-      actorId: data.assigned_by
+      actorId: data.assigned_by,
+      bidding_package_id: data.bidding_package_id,
+      expired_certificates_ack: data.expired_certificates_ack
     });
     return this.getMemberById(member.id);
   }
 
-  async updateMember(id, data) {
+  async updateMember(id, data,actorId) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -68,6 +70,8 @@ class ProjectMemberService {
         return null;
       }
       if (data.assignment_title) {
+        const profile=(await client.query('SELECT id FROM company_personnel WHERE user_id=$1',[member.user_id])).rows[0];
+        if(profile)await require('./companyPersonnelService').acknowledge(client,profile.id,data,actorId,member.project_id);
         await client.query(`
           UPDATE project_personnel SET assignment_title = $1, updated_at = NOW()
           WHERE project_id = $2 AND user_id = $3 AND status = 'ACTIVE'
