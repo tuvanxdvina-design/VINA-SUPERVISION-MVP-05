@@ -25,6 +25,16 @@ module.exports=function(){
   await page.getByRole('button',{name:'Xem 1 ảnh hiện trường',exact:true}).click();
   await page.locator('#photoGallery img').waitFor();
   assert.equal(await page.locator('#photoGallery img').getAttribute('src'),'data:image/png;base64,'+png.toString('base64'));
+  await page.locator('#photoGallery button').click();
+  await page.locator('#logPhotoViewer').waitFor({state:'visible'});
+  assert.equal(await page.locator('#logPhotoViewer img').getAttribute('src'),'data:image/png;base64,'+png.toString('base64'));
+  await page.locator('#logPhotoViewer img').evaluate(img=>img.decode());
+  assert.ok(await page.locator('#logPhotoViewer img').evaluate(img=>img.complete&&img.naturalWidth>0));
+  await page.locator('#logPhotoViewer').getByRole('button',{name:'Phóng to',exact:true}).click();
+  assert.equal(await page.locator('#logPhotoViewer img').evaluate(img=>img.style.maxWidth),'none');
+  await page.locator('#logPhotoViewer').getByRole('button',{name:'Đóng ảnh',exact:true}).click();
+  await page.locator('#logPhotoViewer').waitFor({state:'detached'});
+  await page.locator('#photoGallery img').waitFor({state:'visible'});
   await page.evaluate(()=>closeModal());await (await reviewButton(page,r)).click();await page.locator('#rvComment').waitFor();
   const approved=page.waitForResponse(x=>x.url().endsWith('/daily-logs/'+r.id+'/approve'));
   await page.locator('#modal button.primary').click();assert.equal((await approved).status(),200);

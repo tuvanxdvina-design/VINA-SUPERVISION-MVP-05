@@ -2,6 +2,19 @@ const assert = require('node:assert/strict');
 const { uiTest, loginViaApi, openPage } = require('../helpers');
 
 module.exports = function register() {
+  uiTest('GD-V6-nav thanh điều khiển rõ chữ, không tràn khi xoay ngang và trên màn hình hẹp',async page=>{
+    await loginViaApi(page,'admin');await openPage(page,'projects');
+    for(const [width,height] of [[320,720],[390,844],[844,390],[768,1024]]){
+      await page.setViewportSize({width,height});
+      const layout=await page.evaluate(()=>{const a=document.querySelector('aside'),r=a.getBoundingClientRect();return {width:innerWidth,documentWidth:document.documentElement.scrollWidth,navWidth:r.width,gap:Math.abs(innerHeight-r.bottom),padding:parseFloat(getComputedStyle(document.querySelector('main')).paddingBottom),navHeight:r.height,labels:[...document.querySelectorAll('nav span')].filter(s=>s.getBoundingClientRect().width>0).map(s=>{const x=s.getBoundingClientRect(),b=s.closest('button').getBoundingClientRect();return {inside:x.left>=b.left&&x.right<=b.right+1,font:parseFloat(getComputedStyle(s).fontSize)}})}});
+      assert.ok(layout.documentWidth<=width+1,'Tràn ngang '+width);
+      assert.ok(Math.abs(layout.navWidth-width)<=1&&layout.gap<=1,'Điều khiển phải nằm dưới '+width);
+      assert.ok(layout.padding>=layout.navHeight,'Nội dung bị thanh điều khiển che');
+      assert.ok(layout.labels.length>0&&layout.labels.every(s=>s.inside&&s.font>=11),'Chữ tràn khỏi nút hoặc quá nhỏ');
+      if(width===390||width===844)await page.screenshot({path:require('path').resolve(__dirname,'../../../../runtime-logs/v6-nav-'+width+'.png')});
+    }
+  });
+
   uiTest('GD-13 mobile: dieu huong, noi dung va hop thoai nam gon trong man hinh', async page => {
     await loginViaApi(page, 'admin');
     await openPage(page, 'projects');

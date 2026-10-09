@@ -17,14 +17,14 @@ async function syncProjectPersonnel(projectId){
  }
  if(changed)persistLocal();
 }
-async function fetchTeam(pid,{sync=true}={}){
+async function fetchTeam(pid,{sync=true,signal}={}){
  const project=(db.projects||[]).find(p=>p.id===pid)||{};
  const pending=(db.people||[]).filter(x=>projectMatchesPerson(x,project)&&!x.syncedAt).map(x=>({key:'l:'+x.id,localId:x.id,full_name:cleanPersonName(x.name),assignment_title:x.role||'',certificate:x.certs||'',account_status:'PENDING_SYNC',access_permissions:[],permission_source:'NONE'}));
  let rows=null;
- if(apiOnline()&&!project._localOnly){
+ if(apiOnline()&&navigator.onLine!==false&&!project._localOnly){
   try{
    if(sync)await syncProjectPersonnel(pid);
-   rows=await apiRequest('/project-personnel/project/'+encodeURIComponent(pid)+'/team');
+   rows=await apiRequest('/project-personnel/project/'+encodeURIComponent(pid)+'/team',{signal});
    delete teamErrorByProject[pid];
    db.teamCache=db.teamCache||{};db.teamCache[pid]={at:new Date().toISOString(),rows};persistLocal();
   }catch(error){teamErrorByProject[pid]=error.message;console.warn('Không tải được danh sách nhân sự:',error.message)}

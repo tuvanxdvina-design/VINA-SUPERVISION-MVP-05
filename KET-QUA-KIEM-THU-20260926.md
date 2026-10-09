@@ -175,3 +175,48 @@ Sau triển khai bản 2026-10-07.2-mvp05: chạy lại GD-B3/GD-C3 6/6 đạt t
 # Việc 5 — kiểm thử Windows 08/10/2026
 
 Trên DB thử riêng: hồi quy API/DB 46/46, xung đột 6/6, phân quyền 22/22, jsUnits 6/6; fail/cancelled/skipped/todo đều 0. UI lượt đầu và phiên bản trình bày cuối cùng đều 70/70. Ca GD-V5 xác minh lỗi lần gửi đầu khi vừa online giữ bản nhập, thử lại phát hiện EDIT_CONFLICT, so sánh hai bản và reload giữ bản nhập; CREATE trùng ngày/ca sửa lại hoặc bỏ không GET bản chưa có. Nghiệm thu Android bản vận hành còn chờ người dùng; không suy ra đạt từ test tự động.
+
+# Việc 6 — mở báo cáo nhanh, 09/10/2026
+
+Build 2026-10-09.1-mvp05. Kiểm tra cú pháp frontend đạt. Hồi quy API/DB 46/46, DB vina_reg_v6_fast_20261009. Hai lượt UI đầy đủ 72/73; cả 70 ca cũ đạt, ca mới mạng treo nhân sự gặp race ở bước chuẩn bị quyền/công trình. Sau sửa bước chờ trong test: chạy ba ca mới riêng trên vina_ui_v6_fast_confirm_20261009 đạt 3/3. Không ghi là 73/73 trong một lượt đầy đủ.
+
+Ca mới xác nhận mở offline dưới 1 giây và không gọi mạng; dùng gói thầu/nhân sự đã lưu sau reload; mạng treo ở gói thầu hoặc nhân sự vẫn mở dưới 2,3 giây; nhập sau mở không bị phản hồi muộn thay đổi. Thời gian toàn ca trong log có cả đăng nhập/chuẩn bị và không phải thời gian mở biểu mẫu.
+
+Backup trước cập nhật: backups/vina-supervision-2026-10-09-0803-pre-viec6-open-fast.dump và ZIP uploads. Khôi phục thử: 31 bảng khớp số hàng và hash nội dung. .env sao lưu vào thư mục bảo vệ, không in nội dung. Triển khai bằng start-dev.ps1 thành công, chỉ backend MVP-05 3004 khởi động lại; build và migration health đúng. Bằng chứng: runtime-logs/v6-fast-regression.txt, v6-fast-ui-first.txt, v6-fast-ui-second.txt, v6-fast-ui-confirm.txt.
+
+Điện thoại người dùng: ban đầu 0/0; sau thao tác báo 2 bản ghi/5 ảnh chờ. Chưa xác nhận vì sao có hai bản ghi, chưa xác nhận đồng bộ về 0 hoặc tốc độ thực tế sau cập nhật. Việc 6 chưa chốt nghiệm thu; lỗi thứ tự ảnh và thông báo gửi duyệt chưa sửa.
+
+# Việc 6 — xem ảnh lớn, 2026-10-09.2-mvp05
+
+Cú pháp frontend đạt. DB thử riêng: GD-B3 5/5 (tải ảnh máy chủ, mở ảnh lớn, giải mã ảnh, phóng to, đóng vẫn giữ thư viện) và GD-V6 4/4 (màn hình 390×844 mở ảnh/thu về/đóng, ba ca tốc độ offline/mạng treo). Bằng chứng runtime-logs/v6-photo-server-ui.txt và v6-photo-mobile-ui.txt. Không suy ra chất lượng 5 ảnh thật từ ảnh PNG 1×1 của test.
+
+Backup mới backups/vina-supervision-2026-10-09-0829-pre-viec6-photo.dump và ZIP uploads; restore riêng 31 bảng khớp số hàng/hash. .env sao lưu trong thư mục bảo vệ. Triển khai 3004 bằng start-dev.ps1 đạt; build 2026-10-09.2-mvp05, không migration mới. Người dùng chưa thử lại bấm ảnh trên PC hoặc điện thoại sau bản sửa. Lỗi ROW_VERSION_REQUIRED, thứ tự ảnh và thông báo gửi duyệt chưa sửa trong phạm vi này.
+
+# Việc 6 — phục hồi kết nối, 2026-10-09.3-mvp05
+
+Cú pháp frontend đạt; toàn bộ UI 77/77, fail/cancelled/skipped/todo đều 0, DB riêng vina_ui_v6_retry_full_20261009. Bằng chứng runtime-logs/v6-retry-ui-full-pass.txt. Ca mới dùng đồng hồ Playwright: sau lỗi kết nối, không phát sinh ONLINE mới, phút kế tiếp tự gửi một báo cáo kèm đủ 25 ảnh đúng thứ tự; giữ nguyên bản CONFLICT. Ca quay về ứng dụng tự thử lại đạt; yêu cầu treo trả NETWORK_TIMEOUT; đọc hàng đợi cũ theo thời điểm và giữ thứ tự các lần chọn tiếp đạt. Không coi đồng hồ giả lập/ảnh canvas nhỏ là phép thử mạng yếu thật hoặc 25 ảnh Android thật.
+
+Các lượt test trước sửa điều kiện chờ chỉ giữ làm bằng chứng: v6-retry-ui-first.txt và v6-retry-ui-second.txt. Lượt timer riêng 6/6 tại v6-retry-ui-timer-pass.txt, trước bổ sung sửa thứ tự. Bộ đồng bộ loại mục SYNCED khỏi hàng đợi, nên điều kiện hoàn thành của test là hàng đợi hết và máy chủ có dữ liệu, không chờ mục SYNCED còn nằm trong danh sách.
+
+Backup trước triển khai: backups/vina-supervision-2026-10-09-0854-pre-viec6-retry.dump và ZIP uploads; khôi phục riêng 31 bảng khớp số hàng/hash. .env sao lưu trong thư mục bảo vệ. Không thay Docker volume, MVP-03/04 hay Samsung_T5. Ca 25 ảnh thật của người dùng còn chờ thử lại sau cập nhật; ROW_VERSION_REQUIRED và thông báo gửi duyệt vẫn chưa sửa.
+# 09/10/2026 — Build 2026-10-09.4-mvp05
+
+- Cú pháp frontend đạt; toàn bộ UI 81/81, hồi quy API 46/46 trên DB thử riêng.
+- UI kiểm tra menu 320x720, 390x844, 844x390, 768x1024; chụp/thêm ảnh nhiều lượt; giữ xung đột nếu máy chủ sửa trong lúc chờ CREATE.
+- Sáu ca offline tự động trên Chrome đạt: 5 ảnh, 25 ảnh đúng thứ tự, đóng tab/mở lại, mạng giới hạn, mất mạng/phục hồi, chặn gửi duyệt. Log runtime-logs/v6-remaining-ui.txt; kết quả runtime-logs/viec6-auto-results-full-mobile.json.
+- Mạng giới hạn 400ms, 50KB/s: 10 PNG tổng 10.58MB về 0 trong 217.368 giây, đủ/đúng thứ tự/không trùng. Đây là mô phỏng PC, chưa nghiệm thu mạng di động thật.
+- Backup DB/uploads mốc 2026-10-09-0932-pre-viec6-mobile-camera; khôi phục thử 31 bảng khớp; .env sao lưu vào thư mục bảo vệ. HTTPS /health 200, connected, build .4, không migration/cảnh báo; container/volume giữ nguyên.
+- Camera thật, vuốt đóng PWA Android và mất mạng nhiều giờ còn cần người dùng xác nhận. Chưa chốt Việc 6 đạt.
+- Ca 5 bổ sung: cắt mạng CDP sau 1 giây tải PNG lớn ở 50KB/s rồi khôi phục; đủ 10 ảnh đúng thứ tự, không trùng, đạt 1/1. Log runtime-logs/v6-mid-upload-cdp-ui.txt. Các lần thử trộn browser-context offline với CDP online trước đó không đủ cơ sở kết luận lỗi ứng dụng.
+# 09/10/2026 — 2026-10-09.5-mvp05
+
+Sửa ảnh chờ không hiện trong màn hình Sửa: nhóm Việc 6 đạt 12/12 trên DB riêng vina_ui_v6_preview_group_20261009; log runtime-logs/v6-saved-preview-group-ui.txt. Ca mới xác nhận nháp offline có hai ảnh, xem lớn, lưu lại và reload không mất/trùng ảnh. Cú pháp frontend đạt. Không thay API/DB. Backup DB/uploads mốc 2026-10-09-1111-pre-viec6-saved-photo-preview; khôi phục thử 31 bảng khớp; .env sao lưu bảo vệ. Đã triển khai .5, HTTPS /health xác nhận build .5, DB connected, không migration/cảnh báo. Android sau cập nhật chưa kiểm tra ảnh trong Sửa; ca vuốt đóng PWA đang chờ người dùng.
+# 09/10/2026 — 2026-10-09.6-mvp05
+
+Nhóm GD-V6 đạt 13/13, log runtime-logs/v6-server-preview-group-ui.txt; DB thử vina_ui_v6_server_photos_20261009. Ca mới kiểm tra danh sách/ảnh máy chủ trong Sửa, xem lớn, phản hồi chậm không thay nội dung nhập, không tạo tệp chờ, lỗi kết nối có thông báo. API GET ảnh được mô phỏng trong ca mới; chưa thay thế xác nhận trên Android. Cú pháp đạt. Backup DB/uploads mốc 2026-10-09-1121-pre-viec6-server-photo-preview; khôi phục thử 31 bảng khớp và .env sao lưu bảo vệ. Không đổi DB/API/quyền hoặc dữ liệu Docker.
+# 09/10/2026 — 2026-10-09.7-mvp05: Lưu hai lần
+
+Tái hiện trước sửa: hai lần Lưu đồng thời trong Sửa nháp offline làm 2 ảnh thành 4 tệp chờ. Sau sửa khóa Lưu, ngăn xếp lại tệp đã giữ: GD-V6 15/15 và toàn bộ UI 85/85 đạt trên DB riêng vina_ui_v6_double_save_full_20261009. Logs runtime-logs/v6-double-save-before-ui.txt, v6-double-save-after-group-ui.txt, v6-double-save-full-ui.txt. Cú pháp đạt. Backup DB/uploads mốc 1134-pre-viec6-double-save, khôi phục 31 bảng khớp, .env bảo vệ. Không đổi API/DB/quyền và không dọn hàng đợi hiện hữu. Nguyên nhân 2 bản/4 ảnh chưa gửi sau 2 phút trên Android chưa xác định; đang chờ chẩn đoán chỉ đọc. Ca 3 chưa nghiệm thu.
+# 09/10/2026 — tạm dừng nghiệm thu Android
+
+Theo yêu cầu người dùng, dừng thử Android, giữ dữ liệu/bản nhập. Người dùng xác nhận camera, danh sách/xem rõ ảnh trong Sửa, ca đóng ứng dụng đủ 2 ảnh và 0/0, chặn gửi duyệt đúng, mất mạng nhiều giờ giữ đủ hai ca/ảnh và không trùng. Tự phục hồi Tailscale OPPO F11 Android 9 còn lỗi; quyền chạy nền và VPN luôn bật chưa giải quyết theo các lượt thử. Ca mạng yếu/ngắt tải ảnh chỉ đạt mô phỏng PC; iPhone chỉ xác nhận HTTP 200. Không chốt Việc 6 đạt toàn bộ. Chẩn đoán Android cuối còn 2 PENDING CREATE của hai báo cáo khác nhau; chưa xác nhận về 0 sau đó. Chi tiết runtime-logs/NGHIEM-THU-VIEC6-20261008.md; chưa có định nghĩa Việc 7 để triển khai.
