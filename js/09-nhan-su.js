@@ -57,7 +57,10 @@ function teamErrorNotice(pid){
 async function loadProjectTeamDirectory(projectId=''){
  const el=document.getElementById('projectTeamDirectory');const select=document.getElementById('directoryProject');if(!el||!select)return;
  const addBtn=document.getElementById('addPersonButton');if(addBtn)addBtn.style.display=canManageAssignments()?'':'none';
- const pid=fillProjectSelect(select,projectId||select.value||currentProjectId||'');
+ const pid=fillPersonnelProjectSelect(select,projectId||select.value||currentProjectId||'');
+ const companyScope=canManageAssignments()&&document.getElementById('companyPeople')?.classList.contains('active');
+ if(companyScope){document.getElementById('companyPersonnelActions').hidden=pid!=='__company__';document.getElementById('companyPersonnelTable').hidden=pid!=='__company__';}
+ if(pid==='__company__'){el.innerHTML='';if(addBtn)addBtn.style.display='none';await loadCompanyPersonnel('__company__');return}
  if(!pid){el.innerHTML=localOnlyNotice()+'<p class="muted">Chưa chọn công trình.</p>';return}
  el.innerHTML='<p class="muted">Đang tải...</p>';
  const rows=await fetchTeam(pid);if(select.value!==pid)return;
@@ -150,7 +153,7 @@ async function openTeamMember(encodedKey,pid){
  window.__tmNameSuggestions=nameSuggestions;
  const nameFieldHtml=!r
   ?'<div><label>Chọn hồ sơ công ty đã có</label><select id="tmCompanyProfile" onchange="if(this.value)openCompanyAssignment(this.value,\''+pid+'\')"><option value="">— Hoặc nhập người mới bên dưới —</option>'+nameSuggestions.map(n=>'<option value="'+n.id+'">'+esc(n.full_name+' — '+(n.username||'chưa có tài khoản')+' — '+n.id.slice(0,8))+'</option>').join('')+'</select><label>Họ tên người mới</label><input id="tmName" maxlength="255" value="" autocomplete="off"></div>'
-  :'<div><label>Họ tên (từ hồ sơ công ty)</label><input id="tmName" maxlength="255" value="'+esc(r?.full_name||'')+'" readonly>'+(r.personnel_profile_id?'<button type="button" onclick="viewCompanyProfile(\''+r.personnel_profile_id+'\')">Xem / sửa hồ sơ công ty</button>':'')+'</div>';
+  :'<div><label>Họ tên (từ hồ sơ công ty)</label><input id="tmName" maxlength="255" value="'+esc(r?.full_name||'')+'" readonly>'+(r.personnel_profile_id&&canManageAssignments()?'<button type="button" onclick="viewCompanyProfile(\''+r.personnel_profile_id+'\')">Xem / sửa hồ sơ công ty</button>':'')+'</div>';
  const info='<div class="row">'
   +nameFieldHtml
   +'<div><label>Chức danh tại công trình (công việc được giao)</label>'+titleSelectHtml('tm',r?.assignment_title||'')+'</div>'
@@ -254,7 +257,7 @@ async function removeTeamMember(encodedKey,pid){
 }
 async function refreshTeamViews(pid){
  await fetchTeam(pid,{sync:false});
- const dir=document.getElementById('directoryProject');if(dir&&document.getElementById('people')?.classList.contains('active'))await loadProjectTeamDirectory(pid);
+ const dir=document.getElementById('directoryProject');if(dir&&(document.getElementById('people')?.classList.contains('active')||document.getElementById('companyPeople')?.classList.contains('active'))){if(dir.value==='__company__')await loadCompanyPersonnel();else await loadProjectTeamDirectory(pid);}
  const st=document.getElementById('settingsProject');if(st&&document.getElementById('settings')?.classList.contains('active'))await loadSettingsTeam();
  if(currentProjectId===pid)await loadProjectDetailMembers(pid);
  void loadQualityPermissions(true);

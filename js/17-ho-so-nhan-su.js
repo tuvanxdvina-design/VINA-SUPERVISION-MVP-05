@@ -1,8 +1,25 @@
 let companyProfiles=[],companyProfileContext=null,companyCertificateContext=null;
 const CERT_FIELDS=[['certificate_type','Loại chứng chỉ'],['certificate_number','Số chứng chỉ'],['grade','Hạng'],['field','Lĩnh vực'],['issued_on','Ngày cấp','date'],['expires_on','Ngày hết hạn','date'],['issuer','Nơi cấp']];
 const CP_EXPIRY={EXPIRED:'Đã hết hạn',EXPIRING:'Sắp hết hạn trong 30 ngày',VALID:'Còn hạn / chưa khai báo hạn'};
-async function loadCompanyPersonnel(){
- const box=document.getElementById('companyPersonnelTable');if(!box||typeof getAuthToken!=='function'||!getAuthToken())return;
+function personnelProjects(){return serverProjects().filter(p=>canManageAssignments()||qualityPermissions(p.id).includes('VIEW'))}
+function fillPersonnelProjectSelect(select,old){
+ const manager=canManageAssignments(),list=personnelProjects();
+ select.innerHTML=(manager?'<option value="__company__">Nhân sự toàn công ty</option>':'<option value="">Chọn công trình</option>')+list.map(p=>'<option value="'+p.id+'">'+esc(projectLabel(p))+'</option>').join('');
+ const value=manager&&old==='__company__'?'__company__':list.some(p=>p.id===old)?old:(manager?'__company__':list[0]?.id||'');select.value=value;return value;
+}
+function applyPersonnelNavigation(){
+ const manager=canManageAssignments(),nav=document.querySelector('nav button[data-page="people"]'),controls=document.getElementById('personnelDirectoryControls');
+ if(nav)nav.style.display=manager?'none':'';
+ const host=document.getElementById(manager?'companyPersonnelDirectory':'people');if(controls&&host&&controls.parentElement!==host)host.appendChild(controls);
+ if(manager&&document.getElementById('people')?.classList.contains('active')){goPage('companyPeople');void loadCompanyPersonnel();}
+ const select=document.getElementById('directoryProject');if(select)fillPersonnelProjectSelect(select,select.value);
+}
+async function loadCompanyPersonnel(scope=''){
+ const box=document.getElementById('companyPersonnelTable');if(!box||typeof getAuthToken!=='function'||!getAuthToken()||!canManageAssignments())return;
+ applyPersonnelNavigation();const select=document.getElementById('directoryProject');const pid=fillPersonnelProjectSelect(select,scope||select.value||'__company__');
+ box.hidden=pid!=='__company__';document.getElementById('companyPersonnelActions').hidden=pid!=='__company__';
+ if(pid!=='__company__'){await loadProjectTeamDirectory(pid);return}
+ document.getElementById('projectTeamDirectory').innerHTML='';document.getElementById('addPersonButton').style.display='none';
  document.getElementById('companyPersonnelActions').innerHTML=canManageAssignments()?'<button id="companyAddProfile" class="primary" onclick="editCompanyProfile()">+ Thêm hồ sơ</button><button id="companyMergeButton" onclick="openCompanyMerges()">Gợi ý gộp / lịch sử</button>':'';
  try{companyProfiles=await apiRequest('/company-personnel');box.innerHTML=companyProfiles.length?'<table><thead><tr><th>Họ tên</th><th>Tài khoản liên kết</th><th>Chứng chỉ</th><th></th></tr></thead><tbody>'+companyProfiles.map(p=>'<tr><td>'+esc(p.full_name)+'</td><td>'+esc(p.username||'Không có tài khoản')+'</td><td>'+p.certificate_count+'</td><td><button onclick="viewCompanyProfile(\''+p.id+'\')">Xem hồ sơ</button></td></tr>').join('')+'</tbody></table>':'<p>Chưa có hồ sơ nhân sự công ty.</p>'}
  catch(error){box.textContent='Chưa tải được hồ sơ: '+error.message}
@@ -10,6 +27,8 @@ async function loadCompanyPersonnel(){
 let companySummaryBusy=false,companySummaryChecked=0,companySummaryUser='';
 async function loadCompanyCertificateSummary(force=true){
  const box=document.getElementById('companyCertificateSummary');if(!box||typeof getAuthToken!=='function'||!getAuthToken())return;
+ // Thống kê chứng chỉ toàn công ty chỉ dành cho Admin/Giám đốc; không gọi API để tránh 403 cho tài khoản khác.
+ box.style.display=canManageAssignments()?'':'none';if(!canManageAssignments())return;
  const user=qualityAuthUserId();if(companySummaryBusy||(!force&&user===companySummaryUser&&Date.now()-companySummaryChecked<30000))return;
  companySummaryBusy=true;companySummaryUser=user;companySummaryChecked=Date.now();
  try{const x=await apiRequest('/company-personnel/summary');box.innerHTML='Chứng chỉ đã hết hạn: <b id="companyExpiredCount">'+x.expired+'</b> · Sắp hết hạn trong 30 ngày: <b id="companyExpiringCount">'+x.expiring+'</b> <button onclick="goPage(\'companyPeople\');loadCompanyPersonnel()">Xem hồ sơ nhân sự</button>'}

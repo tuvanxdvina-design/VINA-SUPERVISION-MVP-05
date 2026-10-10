@@ -38,3 +38,81 @@ function cardifyAll(){
  const start=()=>{const root=document.querySelector('main')||document.body;obs.observe(root,{childList:true,subtree:true});schedule()};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
+
+// Điều hướng dưới 900px: dùng lại handler của nút cũ, không đổi nghiệp vụ/quyền.
+const MOBILE_PRIMARY_PAGES=['dashboard','projects','reports','issues'];
+// Audit hiện chỉ là db.audit cục bộ; chưa có API/quyền đọc máy chủ để xác nhận.
+const MOBILE_AUDIT_SERVER_VERIFIED=false;
+function mobileNavIcon(page){
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('mobile-nav-icon');svg.setAttribute('aria-hidden','true');
+ const use=document.createElementNS('http://www.w3.org/2000/svg','use');use.setAttribute('href','#mnav-'+page);svg.appendChild(use);return svg;
+}
+function mobileMoreAllowed(button){
+ const page=button.dataset.page;
+ if(MOBILE_PRIMARY_PAGES.includes(page)||button.style.display==='none')return false;
+ if(page==='audit')return MOBILE_AUDIT_SERVER_VERIFIED;
+ if(page==='settings')return canManageAssignments();
+ if(page==='trash')return canSeeTrash();
+ if(page==='inbox')return isReviewer();
+ return true;
+}
+function closeMobileMore(restoreFocus=true){
+ const menu=document.getElementById('mobileMoreMenu'),button=document.getElementById('mobileMoreButton');
+ if(!menu||menu.hidden)return;
+ menu.hidden=true;document.getElementById('mobileMoreBackdrop').hidden=true;button.setAttribute('aria-expanded','false');
+ if(restoreFocus)button.focus();
+}
+function updateMobileNavigation(){
+ const mobile=matchMedia('(max-width:899px)').matches,active=document.querySelector('main>.page.active')?.id;
+ const selected=active==='daily'?'reports':active==='projectDetail'?'projects':active;
+ const buttons=[...document.querySelectorAll('aside>nav>button[data-page]')];
+ for(const button of buttons){
+  const page=button.dataset.page;
+  if(!MOBILE_PRIMARY_PAGES.includes(page))continue;
+  if(!button.classList.contains('mobile-primary'))button.classList.add('mobile-primary');
+  if(!button.querySelector('.mobile-nav-icon'))button.prepend(mobileNavIcon(page));
+  if(page==='issues'&&!button.querySelector('.mobile-nav-label')){const label=document.createElement('span');label.className='mobile-nav-label';label.textContent='Vấn đề';button.appendChild(label);}
+  // Mở chi tiết công trình vẫn thuộc mục Công trình; PC giữ lựa chọn cũ.
+  if(mobile&&button.classList.contains('active')!==(selected===page))button.classList.toggle('active',selected===page);
+  button.setAttribute('aria-label',mobile&&page==='issues'?'Vấn đề':button.querySelector('span:not(.mobile-nav-label)')?.textContent||page);
+  if(mobile&&selected===page)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+ }
+ const more=document.getElementById('mobileMoreButton'),menu=document.getElementById('mobileMoreMenu');if(!more||!menu)return;
+ const selectedMore=mobile&&!!selected&&!MOBILE_PRIMARY_PAGES.includes(selected);
+ if(more.classList.contains('active')!==selectedMore)more.classList.toggle('active',selectedMore);
+ if(!mobile){closeMobileMore(false);return;}
+ if(menu.hidden)return;
+ const choices=buttons.filter(mobileMoreAllowed),signature=choices.map(b=>b.dataset.page+':'+b.querySelector('span')?.textContent+':'+(b.dataset.page===selected)).join('|');
+ const box=document.getElementById('mobileMoreItems');if(box.dataset.signature===signature)return;box.dataset.signature=signature;box.replaceChildren();
+ for(const source of choices){
+  const button=document.createElement('button');button.type='button';button.dataset.mobileTarget=source.dataset.page;button.appendChild(mobileNavIcon(source.dataset.page));
+  const label=document.createElement('span');label.textContent=source.querySelector('span')?.textContent||'';button.appendChild(label);
+  if(source.dataset.page===selected){button.classList.add('active');button.setAttribute('aria-current','page');}
+  button.onclick=()=>{closeMobileMore(false);source.click();document.querySelector('main>.page.active h2')?.setAttribute('tabindex','-1');document.querySelector('main>.page.active h2')?.focus({preventScroll:true});};box.appendChild(button);
+ }
+}
+function toggleMobileMore(){
+ const menu=document.getElementById('mobileMoreMenu');if(!matchMedia('(max-width:899px)').matches||!menu)return;
+ if(!menu.hidden)return closeMobileMore();
+ menu.hidden=false;document.getElementById('mobileMoreBackdrop').hidden=false;document.getElementById('mobileMoreButton').setAttribute('aria-expanded','true');updateMobileNavigation();(menu.querySelector('button[data-mobile-target]')||menu.querySelector('button'))?.focus();
+}
+(function(){
+ let queued=false;const schedule=()=>{if(!queued){queued=true;requestAnimationFrame(()=>{queued=false;updateMobileNavigation();});}};
+ const start=()=>{
+  document.getElementById('mobileMoreButton').addEventListener('click',toggleMobileMore);
+  document.getElementById('mobileMoreBackdrop').addEventListener('click',()=>closeMobileMore());
+  document.getElementById('mobileMoreClose').addEventListener('click',()=>closeMobileMore());
+  document.addEventListener('keydown',event=>{
+   if(document.getElementById('mobileMoreMenu').hidden)return;
+   if(event.key==='Escape'){event.preventDefault();closeMobileMore();}
+   if(event.key==='Tab'){
+    const focusable=[...document.querySelectorAll('#mobileMoreMenu button')];
+    const first=focusable[0],last=focusable.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+   }
+  });
+  const observer=new MutationObserver(schedule);observer.observe(document.querySelector('aside>nav'),{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+  for(const section of document.querySelectorAll('main>.page'))observer.observe(section,{attributes:true,attributeFilter:['class']});
+  matchMedia('(max-width:899px)').addEventListener('change',schedule);schedule();
+ };
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();

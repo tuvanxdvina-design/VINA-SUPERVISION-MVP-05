@@ -5,10 +5,13 @@ let users,fixture;
 async function prepare(){if(!users){users=await createUsers(BASE,'test.hoso');fixture=await createProjects(users)}return fixture}
 async function login(page,who){await loginViaApi(page,users[who].username,users[who].password);await page.evaluate(async()=>loadQualityPermissions(true));await openPage(page,'companyPeople');await page.waitForFunction(()=>!!document.querySelector('#companyPersonnelTable table'))}
 module.exports=()=>{
- for(const who of ['gst','ks'])uiTest('GD-HS '+who+': hồ sơ chỉ đọc, không thấy sửa hoặc gợi ý gộp, API chặn',async page=>{
-  await prepare();const p=expect(await users.admin.api.post('/company-personnel',{full_name:'Hồ sơ chỉ xem '+who}),201);await login(page,who);
-  assert.equal(await page.locator('#companyAddProfile').count(),0);assert.equal(await page.locator('#companyMergeButton').count(),0);await page.locator('#companyPersonnelTable tr').filter({hasText:p.full_name}).getByRole('button',{name:'Xem hồ sơ'}).click();await page.waitForSelector('#modal.show');assert.equal(await page.locator('#mbody button').count(),0);
-  const denied=await page.evaluate(async id=>{try{await apiRequest('/company-personnel/'+id,{method:'PUT',body:JSON.stringify({full_name:'Cấm'})});return false}catch(e){return e.status}},p.id);assert.equal(denied,403);
+ for(const who of ['gst','ks'])uiTest('GD-HS '+who+': không thấy hồ sơ nhân sự công ty và thống kê chứng chỉ; API chặn; nhân sự công trình vẫn xem',async page=>{
+  const f=await prepare();const p=expect(await users.admin.api.post('/company-personnel',{full_name:'Hồ sơ ẩn '+who}),201);
+  await loginViaApi(page,users[who].username,users[who].password);await page.evaluate(async()=>loadQualityPermissions(true));
+  await page.waitForFunction(()=>getComputedStyle(document.querySelector('nav button[data-page="companyPeople"]')).display==='none');
+  await page.waitForFunction(()=>getComputedStyle(document.getElementById('companyCertificateSummary')).display==='none');
+  const status=await page.evaluate(async id=>{const out=[];for(const path of ['/company-personnel','/company-personnel/'+id]){try{await apiRequest(path);out.push(200)}catch(e){out.push(e.status)}}return out},p.id);assert.deepEqual(status,[403,403]);
+  assert.ok(expect(await users[who].api.get('/project-personnel/project/'+f.projects.A.id+'/team'),200).length>0);
  });
  uiTest('GD-HS Giám đốc: nhập hồ sơ/chứng chỉ/scan, cảnh báo bắt tích Tôi đã biết rồi phân công',async page=>{
   const f=await prepare();await login(page,'gd');await page.click('#companyAddProfile');await page.fill('#cpName','Hồ sơ giao diện GD');await page.click('#cpSave');await page.waitForFunction(()=>document.querySelector('#mtitle')?.textContent==='Hồ sơ: Hồ sơ giao diện GD');await page.getByRole('button',{name:'+ Chứng chỉ',exact:true}).click();

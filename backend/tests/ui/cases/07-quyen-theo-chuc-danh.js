@@ -15,12 +15,12 @@ module.exports = function () {
     const pid = await projectIdByContract(await tokenOf('admin'), '001');
     await page.locator('#directoryProject option[value="' + pid + '"]').waitFor({ state: 'attached' });
     await page.selectOption('#directoryProject', pid);
-    await page.waitForFunction(() => (document.getElementById('people')?.innerText || '').includes('Nguyễn Thành B'));
+    await page.waitForFunction(() => (document.getElementById('projectTeamDirectory')?.innerText || '').includes('Nguyễn Thành B'));
 
     // Phải chọn người ĐÃ liên kết tài khoản: khung "Quyền truy cập tại công trình" chỉ hiện khi có tài khoản.
     // (Nguyễn Thành B ↔ tài khoản thanhb, vai trò ENGINEER, chức danh GS viên tại công trình 001.)
     // Ca này KHÔNG bấm "Lưu thay đổi" — chỉ đọc quyền mặc định, để không đổi dữ liệu dùng chung với ca khác.
-    await page.locator('#people tr.clickable', { hasText: 'Nguyễn Thành B' }).first().click();
+    await page.locator('#projectTeamDirectory tr.clickable', { hasText: 'Nguyễn Thành B' }).first().click();
     await page.waitForSelector('#modal.show #tmTitle', { state: 'visible' });
     // Khung quyền của người đã liên kết tài khoản nằm trực tiếp trong #mbody (không phải trong #tmPermWrap).
     await page.waitForSelector('#mbody .tmPerm', { state: 'attached' });

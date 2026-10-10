@@ -55,7 +55,7 @@ function enforceDashboardAccess(){
 function canCreateLogIn(projectId){if(canManageAssignments())return true;return qualityPermissions(projectId).includes('CREATE')}
 function isPrivilegedLogEditor(){return canManageAssignments()}
 function renderSelects(){['logProject','issueProject','docProject'].forEach(sid=>{let el=document.getElementById(sid);if(el){let old=el.value;el.innerHTML='<option value="">Tất cả công trình</option>'+projectsOptions(old);el.value=old||''}})}
-function goPage(page){if(page==='dashboard'&&!canViewDashboard())page='projects';if(page==='settings'&&!canManageAssignments())page='projects';document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));const navKey=page==='daily'?'reports':page;const btn=document.querySelector(`nav button[data-page="${navKey}"]`);if(btn)btn.classList.add('active');document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(page).classList.add('active');document.querySelectorAll('.report-hub-tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===page))}
+function goPage(page){if(page==='companyPeople'&&!canManageAssignments())page='people';if(page==='people'&&canManageAssignments())page='companyPeople';if(page==='dashboard'&&!canViewDashboard())page='projects';if(page==='settings'&&!canManageAssignments())page='projects';document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));const navKey=page==='daily'?'reports':page;const btn=document.querySelector(`nav button[data-page="${navKey}"]`);if(btn)btn.classList.add('active');document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(page).classList.add('active');document.querySelectorAll('.report-hub-tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===page))}
 function goDashboard(){currentProjectId=null;goPage('dashboard');renderAll()}
 function logStatusBadge(st){return '<span class="badge '+String(st||'').toLowerCase()+'">'+esc(LOG_STATUS[st]||st||'')+'</span>'}
 function logActionsHtml(x){
@@ -147,6 +147,8 @@ function renderAll(){
 const qualityNav=document.querySelector('nav button[data-page="issues"]');if(qualityNav)qualityNav.innerHTML='⚠️ <span>Chất lượng công trình</span>';const qualityHeading=document.querySelector('#issues h2');if(qualityHeading)qualityHeading.textContent='Chất lượng công trình';
 const addPersonButton=document.getElementById('addPersonButton');if(addPersonButton)addPersonButton.style.display=canManageAssignments()?'':'none';
 const settingsNav=document.querySelector('nav button[data-page="settings"]');if(settingsNav)settingsNav.style.display=canManageAssignments()?'':'none';if(!canManageAssignments()&&document.getElementById('settings')?.classList.contains('active'))goPage('projects');
+const companyNav=document.querySelector('nav button[data-page="companyPeople"]');if(companyNav)companyNav.style.display=canManageAssignments()?'':'none';if(!canManageAssignments()&&document.getElementById('companyPeople')?.classList.contains('active'))goPage('projects');
+if(typeof applyPersonnelNavigation==='function')applyPersonnelNavigation();
 if(typeof applyInboxNavVisibility==='function')applyInboxNavVisibility();
 if(typeof applyTrashNavVisibility==='function')applyTrashNavVisibility();
 enforceDashboardAccess();renderSelects();if(canViewDashboard())renderDashboard();renderProjects();renderLogs();renderIssues();renderDocs();if(typeof renderReports==='function')renderReports();renderPeople();renderAudit();

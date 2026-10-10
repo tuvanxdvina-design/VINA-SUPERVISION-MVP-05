@@ -8,6 +8,7 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 **Do not re-read whole files.** Use this guide + `docs/CODEMAP.md`, then Grep for the function you need and Read only that range.
 
 - Nút theo quyền (10/10/2026): `js/18-quyen-nut.js` cập nhật nút khi online/pageshow/visible/đổi công trình và HTTP 403; giữ modal, bản nhập và tệp chờ. `canManageAssignments` chỉ nhận `role_name` ADMIN/DIRECTOR; sửa công trình dùng `canEditProject(pid)`, không dùng `canEdit` cũ. Bảng đối chiếu API và file trước/sau: `docs/NUT-THEO-QUYEN-MVP05.md`; ca Chrome `17-permission-buttons.js`. Không đổi quyền máy chủ.
+- Thanh điện thoại (build ứng viên 2026-10-10.2): dưới 900px chỉ 5 mục, Thêm gọi nút nav gốc; SVG nội tuyến index.html, logic trong `js/16-the-dien-thoai.js`. Thiết lập/Thùng rác theo quyền cũ; Audit chỉ là nhật ký trên thiết bị, chưa có API đọc nên ẩn trên điện thoại, không suy quyền máy chủ. Ca `18-mobile-navigation.js`, ảnh/log và giới hạn: `docs/THANH-DUOI-DIEN-THOAI-MVP05.md`. PC giữ bố cục cũ; không chạy launcher khi chỉ kiểm thử mã.
 
 ## Stack & layout
 - Backend: Node 24 + Express 5 + PostgreSQL 14 (container lấy động bằng `docker compose ps -q postgres`, cổng máy `5434`, DB `vina_supervision_mvp04`, app user `vina_user`). Entry `backend/server.js` → `backend/src/app.js`.

@@ -6,6 +6,9 @@ const {sendStoredFile}=require('../utils/fileSafety');
 const pool=require('../utils/db');
 const router=express.Router();router.use(auth.verifyToken);
 const edit=rbac.checkRole(['ADMIN','DIRECTOR']);
+// Hồ sơ nhân sự công ty (đọc lẫn ghi) chỉ dành cho Admin/Giám đốc. Tài khoản khác xem nhân sự,
+// chứng chỉ và scan của công trình mình qua /project-personnel (kiểm quyền công trình + DOWNLOAD).
+router.use(edit);
 const validId=(req,res,next)=>{for(const value of Object.values(req.params))if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))return res.status(400).json({error:'Mã hồ sơ không hợp lệ'});next()};
 const run=fn=>async(req,res)=>{try{await fn(req,res)}catch(e){if(e.status)return res.status(e.status).json({error:e.message,code:e.code,details:e.details});if(['23505','23503','23514','22007','22008','22P02','22001','P2001'].includes(e.code))return res.status(e.code==='23505'?409:400).json({error:e.code==='23505'?'Tài khoản đã có hồ sơ nhân sự':'Dữ liệu hoặc ngày chứng chỉ không hợp lệ'});console.error('company-personnel:',e.message);res.status(500).json({error:'Không xử lý được hồ sơ nhân sự'})}};
 router.get('/summary',run(async(req,res)=>res.json(await service.summary())));

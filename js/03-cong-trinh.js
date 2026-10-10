@@ -32,11 +32,12 @@ function projectMatchesPerson(person,project){
 function goProjects(){currentProjectId=null;goPage('projects');renderAll()}
 function openProjectSection(page){
   if(!currentProjectId)return;
-  goPage(page);
+  goPage(page==='people'&&canManageAssignments()?'companyPeople':page);
   const selectId={daily:'logProject',issues:'issueProject',docs:'docProject'}[page];
   if(selectId){const el=document.getElementById(selectId);if(el){el.value=currentProjectId;el.dispatchEvent(new Event('change'));}}
   
   renderAll();
+  if(page==='people')void loadProjectTeamDirectory(currentProjectId);
 }
 function openProjectDetail(pid){currentProjectId=pid;goPage('projectDetail');renderProjectDetail();void loadQualityPermissions(true);void syncDocumentsFromApi();void loadProjectDetailMembers(pid);void loadProjectProgressPlans(pid);if(typeof loadProjectHealth==='function')void loadProjectHealth(pid)}
 function projectRows(arr,forDash=false){

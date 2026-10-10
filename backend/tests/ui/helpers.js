@@ -128,6 +128,10 @@ async function loginViaForm(page, who, password = 'demo') {
 // "Báo cáo ngày" (daily) không còn nút riêng trên thanh nav (gộp vào "Báo cáo", bản MVP-05) —
 // vào qua nút "Báo cáo" rồi bấm tab trong trang "📝 Báo cáo ngày (cá nhân)".
 async function openPage(page, dataPage) {
+  if(dataPage==='people'&&await page.evaluate(()=>canManageAssignments())){
+    await page.click('nav button[data-page="companyPeople"]');await page.waitForSelector('#companyPeople.page.active');
+    await page.evaluate(()=>loadProjectTeamDirectory(serverProjects()[0]?.id||''));return;
+  }
   if (dataPage === 'daily') {
     await page.click('nav button[data-page="reports"]');
     // Hai trang #reports và #daily đều có thanh tab giống nhau; chỉ bấm cái đang hiện.

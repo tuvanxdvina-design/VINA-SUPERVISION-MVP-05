@@ -34,8 +34,10 @@ module.exports=()=>{
   assert.equal(await ir.locator('button[onclick*="closeIssue"]:visible').count(),create?1:0);
   await page.evaluate(id=>viewIssue(id),issue.id);await visible(page,'#mbody button[onclick*="deleteContent"]',manager);await page.evaluate(()=>closeModal());
   const closed=expect(await users.admin.api.post('/issues/'+issue.id+'/resolve',{expected_row_version:issue.row_version,resolution_note:'Đóng thử'}),200);await local(page,'issues',closed);assert.equal(await ir.locator('button[onclick*="reopenQualityDocument"]:visible').count(),lead?1:0);
-  await openPage(page,'companyPeople');await page.evaluate(()=>loadCompanyPersonnel());await visible(page,'#companyAddProfile',manager);await visible(page,'#companyMergeButton',manager);
-  const profile=expect(await users.admin.api.post('/company-personnel',{full_name:'Hồ sơ nút '+who}),201);await page.evaluate(id=>viewCompanyProfile(id),profile.id);await visible(page,'#mbody button[onclick*="editCompanyProfile"]',manager);await visible(page,'#mbody button[onclick*="editCompanyCertificate"]',manager);await visible(page,'#mbody button[onclick*="deleteCompanyProfile"]',manager);await page.evaluate(()=>closeModal());
+  if(manager){
+   await openPage(page,'companyPeople');await page.evaluate(()=>loadCompanyPersonnel());await visible(page,'#companyAddProfile',true);await visible(page,'#companyMergeButton',true);
+   const profile=expect(await users.admin.api.post('/company-personnel',{full_name:'Hồ sơ nút '+who}),201);await page.evaluate(id=>viewCompanyProfile(id),profile.id);await visible(page,'#mbody button[onclick*="editCompanyProfile"]',true);await visible(page,'#mbody button[onclick*="editCompanyCertificate"]',true);await visible(page,'#mbody button[onclick*="deleteCompanyProfile"]',true);await page.evaluate(()=>closeModal());
+  }else await visible(page,'nav button[data-page="companyPeople"]',false); // Hồ sơ công ty chỉ dành cho Admin/Giám đốc
   assert.equal(await page.evaluate(()=>typeof canEdit),'undefined');
  });
  uiTest('GD-NUT lưu công trình: quyền APPROVE tại B, không theo tên tài khoản',async page=>{
