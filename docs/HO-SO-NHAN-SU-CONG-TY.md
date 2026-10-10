@@ -8,7 +8,8 @@ Thực hiện trong worktree `runtime-logs/worktrees/ho-so-nhan-su`; thư mục 
 
 - Mục **Hồ sơ nhân sự công ty** có một dòng cho mỗi hồ sơ, liên kết tài khoản tùy chọn. Chọn hồ sơ đã có để phân công vào các công trình, dùng chung chứng chỉ và scan.
 - Chứng chỉ gồm loại, số, hạng, lĩnh vực, ngày cấp, ngày hết hạn, nơi cấp; nhiều scan PDF/ảnh, tối đa 15 MB/tệp.
-- Chỉ ADMIN/DIRECTOR thêm, sửa, xóa hồ sơ, chứng chỉ, scan. Các vai trò khác chỉ xem. Máy chủ kiểm tra mọi đường ghi, kể cả đường nhân sự công trình cũ.
+- Chỉ ADMIN/DIRECTOR thêm, sửa, xóa hồ sơ, chứng chỉ, scan. Máy chủ kiểm tra mọi đường ghi, kể cả đường nhân sự công trình cũ.
+- (Cập nhật 10/10) Mục **Hồ sơ nhân sự công ty** — danh sách, chi tiết, scan, thống kê chứng chỉ hết hạn — **chỉ ADMIN/DIRECTOR thấy**; mọi API `/company-personnel` trả 403 với vai trò khác. Tài khoản khác chỉ xem nhân sự của công trình được phân công (trang Nhân sự), gồm chứng chỉ, và scan qua `/project-personnel/:id/files` (quyền công trình + DOWNLOAD).
 - Hồ sơ đang phân công phải được rút khỏi công trình trước khi xóa. Xóa hồ sơ/chứng chỉ/scan là xóa mềm; không xóa bytes đã dùng trong bản chụp lịch sử.
 - Xóa công trình chỉ xóa phân công; hồ sơ công ty, chứng chỉ và scan tập trung vẫn còn.
 - Phân công người có bất kỳ chứng chỉ hết hạn nào trả `409 EXPIRED_CERTIFICATES` nếu chưa xác nhận. Giao diện bắt tích **Tôi đã biết**. Backend chỉ nhận boolean `true`; audit `ACK_EXPIRED_CERTIFICATES` ghi người, thời điểm, công trình và các chứng chỉ trong cùng giao dịch. Lỗi audit hủy phân công.
@@ -115,3 +116,9 @@ Khi nghiệm thu trên môi trường thử/đã triển khai, dùng công trìn
 6. Xóa công trình thử, kiểm tra hồ sơ và scan công ty còn nguyên.
 
 Trước triển khai thật: sao lưu DB và kiểm tra khôi phục, sao lưu .env/uploads; triển khai migration bằng launcher hiện có, cập nhật main sau PR/CI, kiểm tra SHA/build/health và nghiệm thu trực tiếp. Giữ nguyên Docker volume và bản sao lưu.
+
+## Giao diện hợp nhất ngày 10/10/2026
+
+- Admin/Giám đốc chỉ có mục Hồ sơ nhân sự công ty. Bộ chọn gồm Nhân sự toàn công ty và các công trình; chọn công trình giữ nguyên phân công, tài khoản, quyền truy cập, chức danh và scan.
+- Các vai trò khác chỉ có mục Nhân sự, bộ chọn giới hạn các công trình có quyền VIEW; API hồ sơ toàn công ty bị chặn 403. Chi tiết công trình dùng nhãn Nhân sự và mở đúng công trình.
+- Áp dụng cho cả điện thoại và máy tính; không thay cơ chế row_version hoặc đồng bộ ngoại tuyến.

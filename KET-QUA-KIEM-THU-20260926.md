@@ -244,3 +244,33 @@ Lượt đầu UI 95/100: sửa nút Xem xét dùng mục duyệt máy chủ tha
 Đối chiếu chỉ đọc: 14 bảng dữ liệu công trình thật nguyên vẹn, lịch sử gộp và scan giữ nguyên; chỉ còn 3 công trình thật, tài khoản/hồ sơ thử V7 không hoạt động. /health vận hành OK, database connected, build vẫn 2026-10-09.8-mvp05. Chưa commit/push/merge, chưa restart backend; chưa nghiệm thu tay build ứng viên trên điện thoại. Không tiếp tục nghiệm thu Tailscale Android đã tạm dừng.
 
 Bảng nút → hàm → quyền máy chủ và danh sách file trước/sau: [NUT-THEO-QUYEN-MVP05.md](docs/NUT-THEO-QUYEN-MVP05.md).
+
+## 10/10/2026 — Thanh điện thoại, build ứng viên 2026-10-10.2-mvp05
+
+Nhánh `codex/mvp05-thanh-duoi-dien-thoai` từ main đã khớp origin/main, `fe6591b` (PR #9). Chỉ index.html/js điện thoại và metadata build; không sửa API, row_version, đồng bộ, route/service/middleware/quyền máy chủ.
+
+| Bộ | Kết quả | Log runtime-logs |
+|---|---|---|
+| API hồi quy | 46/46 | mobile-nav-tests-regression-all.txt |
+| Phân quyền API | 22/22 | mobile-nav-tests-permissions-all.txt |
+| Xung đột | 6/6 | mobile-nav-tests-conflict-all.txt |
+| Hồ sơ nhân sự | 11/11 | mobile-nav-tests-personnel-all.txt |
+| JavaScript unit | 6/6 | mobile-nav-tests-jsUnits-all.txt |
+| Chrome toàn bộ | 110/110 | mobile-nav-tests-ui-all.txt |
+| **Tổng** | **201/201** | DB/uploads thử riêng |
+| PWA + shell offline | Đạt | mobile-nav-tests-pwa.txt |
+| Cú pháp/build và diff | 0 lỗi | check-frontend.js, git diff --check |
+
+Nhóm mới 10 ca: 360/390/768 px, 5 mục SVG/nhãn ≥12 px/tối đa hai dòng/active gạch dưới/tên dài/menu; năm vai trò ADMIN, DIRECTOR, TVGS_LEAD, ENGINEER, MANAGER; cấp/thu hồi DELETE khi menu mở; PC và ngưỡng 899/900 px. Thùng rác đối chiếu GET API thực, đúng 200/403 sau đổi quyền. Header và thanh bên PC cùng kích thước với bản main; bảng PC vẫn dạng bảng. Lượt Chrome toàn bộ 339,142 giây.
+
+Ảnh trước/sau và menu ở `runtime-logs/mobile-nav-screenshots/`: before/after-360, 390, 768.png, after-*-more.png, thêm PC 1440.png. Ảnh trước đọc index/js điện thoại của main qua route kiểm thử, không rollback file. Cùng công trình thử 001 và tên dài trong phiên Chrome. Bốn ca chụp trước đạt; nhóm mới riêng đạt 10/10 trước khi chạy toàn bộ. Đã xem ảnh sau 360/390 và menu 768, chữ/icon rõ, tên không tràn khỏi header.
+
+Lỗi trong nhóm mới đã xử lý: quy tắc display cũ che nhãn Vấn đề; kiểm thử PUT quyền dùng đúng access_permissions; phép đo chờ SVG/nhãn dựng xong sau renderAll thay nội dung nút. Không nới tiêu chí hoặc sửa đồng bộ/quyền để làm kiểm thử đạt.
+
+**Audit chưa có API đọc**: mã hiện dùng db.audit trên thiết bị, /api/audit và /api/audit-logs trả 404 với cả năm vai trò. Không thể xác nhận quyền đọc Audit phía máy chủ. Đã hỏi người dùng; chưa có trả lời thì dùng phương án đã thông báo: ẩn mục Nhật ký hệ thống trên điện thoại đến khi có quyền xác nhận. PC giữ mục với nhãn mới. Không coi đây là Audit API đã được bảo vệ.
+
+Chưa commit/push/merge/triển khai build .2, chưa nghiệm thu trên điện thoại thật. /health vận hành vẫn OK, DB connected, build 2026-10-10.1-mvp05; không restart backend hoặc đụng dữ liệu thật/Docker/MVP-03/04. Chi tiết file trước/sau và ảnh: [THANH-DUOI-DIEN-THOAI-MVP05.md](docs/THANH-DUOI-DIEN-THOAI-MVP05.md).
+
+## Kiểm thử phần nhân sự hợp nhất (10/10/2026)
+
+API 46/46, quyền 22/22, xung đột 6/6, nhân sự 11/11, unit 6/6, PWA đạt. Chrome toàn bộ: 119/120; HZ-04 còn đòi nút Nhân sự riêng cho QT, đã đổi kỳ vọng sang Hồ sơ nhân sự công ty và chạy lại riêng đạt 1/1. Mười ca hợp nhất nhân sự cho năm vai trò tại 390/1440 px đều đạt. CI sẽ chạy lại toàn bộ mã cuối trước merge. Không coi kiểm thử mô phỏng là nghiệm thu điện thoại thật.

@@ -13,15 +13,20 @@ async function person(name,uid=null){return expect(await admin.post('/company-pe
 async function cert(p,number,extra={}){return expect(await admin.post('/company-personnel/'+p.id+'/certificates',{certificate_type:'Giám sát xây dựng',certificate_number:number,grade:'I',field:'Dân dụng',issued_on:'2020-01-01',issuer:'Sở xây dựng',...extra}),201)}
 async function scan(p,c,label){return expect(await admin.upload(`/company-personnel/${p.id}/certificates/${c.id}/files?name=${label}.pdf`,Buffer.from('%PDF-1.7 '+label),'application/pdf'),201)}
 async function assign(p,ct='A',extra={},api=admin){return api.post('/project-personnel',{project_id:fixture.projects[ct].id,personnel_profile_id:p.id,user_id:p.user_id,full_name:p.full_name,assignment_title:'Kỹ sư',company_assignment:true,...extra})}
-test('Hồ sơ/cert/file: ADMIN và DIRECTOR sửa; GST/KS/QL chỉ xem, gọi trực tiếp bị chặn',async()=>{
+test('Hồ sơ công ty chỉ ADMIN/DIRECTOR; GST/KS/QL bị chặn đọc/ghi nhưng vẫn xem nhân sự, chứng chỉ, scan của công trình được phân công',async()=>{
  const p=await person('Hồ sơ phân quyền'),c=await cert(p,'QUYEN-1'),f=await scan(p,c,'scan-quyen');
  for(const who of ['gst','ks','ql']){const a=users[who].api;
-  expect(await a.get('/company-personnel'),200);expect(await a.get('/company-personnel/'+p.id),200);
+  for(const path of ['/company-personnel','/company-personnel/'+p.id,'/company-personnel/summary',`/company-personnel/${p.id}/certificates/${c.id}/files/${f.id}`])expect(await a.get(path),403);
   for(const [method,url,body] of [['post','/company-personnel',{full_name:'Cấm'}],['put','/company-personnel/'+p.id,{full_name:'Cấm'}],['del','/company-personnel/'+p.id],['post',`/company-personnel/${p.id}/certificates`,{certificate_type:'Cấm'}],['put',`/company-personnel/${p.id}/certificates/${c.id}`,{issuer:'Cấm'}],['del',`/company-personnel/${p.id}/certificates/${c.id}`],['del',`/company-personnel/${p.id}/certificates/${c.id}/files/${f.id}`],['post','/company-personnel/merges',{}],['post','/company-personnel/merges/'+p.id+'/undo',{}]])expect(await a[method](url,body),403);
   expect(await a.upload(`/company-personnel/${p.id}/certificates/${c.id}/files?name=no.pdf`,Buffer.from('no'),'application/pdf'),403);
   expect(await a.get('/company-personnel/suggestions'),403);expect(await a.get('/company-personnel/merges'),403);
-  const bytes=expect(await a.get(`/company-personnel/${p.id}/certificates/${c.id}/files/${f.id}`),200);assert.equal(bytes.toString(),'%PDF-1.7 scan-quyen');
  }
+ const pp=expect(await assign(p,'A'),201);
+ for(const who of ['gst','ks','ql']){const a=users[who].api;
+  const row=expect(await a.get('/project-personnel/project/'+fixture.projects.A.id+'/team'),200).find(x=>x.personnel_profile_id===p.id);assert.equal(row.certificates[0].certificate_number,'QUYEN-1');
+  const files=expect(await a.get('/project-personnel/'+pp.id+'/files'),200);assert.equal(expect(await a.get('/project-personnel/'+pp.id+'/files/'+files[0].id),200).toString(),'%PDF-1.7 scan-quyen');
+ }
+ expect(await admin.del('/project-personnel/'+pp.id),200);
  expect(await gd.put('/company-personnel/'+p.id,{notes:'Giám đốc sửa'}),200);expect(await gd.put(`/company-personnel/${p.id}/certificates/${c.id}`,{issuer:'Nơi cấp mới'}),200);
  expect(await gd.del(`/company-personnel/${p.id}/certificates/${c.id}/files/${f.id}`),200);expect(await gd.del(`/company-personnel/${p.id}/certificates/${c.id}`),200);expect(await gd.del('/company-personnel/'+p.id),200);
 });

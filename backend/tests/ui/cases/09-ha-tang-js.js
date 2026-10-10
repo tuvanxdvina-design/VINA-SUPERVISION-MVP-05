@@ -18,9 +18,10 @@ module.exports = function () {
     page.on('console', m => { if (m.type() === 'error') loi.push(m.text()); });
     page.on('pageerror', e => loi.push('pageerror: ' + e.message));
     await loginViaApi(page, 'admin');
-    for (const p of ['dashboard', 'projects', 'daily', 'docs', 'issues', 'reports', 'people', 'settings']) {
+    for (const p of ['dashboard', 'projects', 'daily', 'docs', 'issues', 'reports', 'companyPeople', 'settings']) {
       assert.equal(await navVisible(page, p), true, 'thiếu mục nav: ' + p);
     }
+    assert.equal(await navVisible(page, 'people'), false, 'QT dùng mục Hồ sơ nhân sự công ty hợp nhất');
     assert.deepEqual(loi, [], 'không được có lỗi console khi nạp trang');
   });
 };
