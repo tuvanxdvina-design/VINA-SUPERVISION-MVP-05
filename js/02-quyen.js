@@ -1,8 +1,8 @@
 function qualityRole(){const u=qualityAuthUser();return roleToken(u?.role_name||u?.roleName||u?.role||db.role)}
-function qualityIsManager(){const r=qualityRole();return r==='ADMIN'||r==='DIRECTOR'||r==='GIAM DOC'}
+function qualityIsManager(){return canManageAssignments()}
 function qualityPermissions(projectId){if(qualityIsManager())return ['VIEW','EDIT','CREATE','DOWNLOAD','APPROVE','DELETE'];const cached=qualityPermissionCache.get(String(projectId||''));const raw=cached?.permissions;return Array.isArray(raw)?raw.map(v=>String(v).toUpperCase()):[]}
 function qualityIsLocked(x){const r=roleToken(x?.status);return ['SIGNED','CLOSED','RESOLVED','LOCKED','DA KY','DA DONG','DA KHOA'].some(v=>r===v||r.includes(v))}
-async function loadQualityPermissions(force=false){if(typeof apiRequest!=='function'||typeof getAuthToken!=='function'||!getAuthToken()||!navigator.onLine)return;if(!force&&qualityPermissionCache.size)return;try{const map=await apiRequest('/project-members/my-permissions');qualityPermissionCache.clear();Object.entries(map||{}).forEach(([pid,v])=>qualityPermissionCache.set(String(pid),{permissions:Array.isArray(v.permissions)?v.permissions:[],memberId:v.member_id||'',source:v.source||''}));db.myPermissions=map;persistLocal()}catch(error){console.warn('Không tải được quyền theo công trình:',error.message);if(db.myPermissions)Object.entries(db.myPermissions).forEach(([pid,v])=>qualityPermissionCache.set(String(pid),{permissions:v.permissions||[]}))}renderIssues();renderLogs();if(typeof applyInboxNavVisibility==='function')applyInboxNavVisibility();if(typeof applyTrashNavVisibility==='function')applyTrashNavVisibility();if(typeof renderReports==='function')renderReports()}
+async function loadQualityPermissions(force=false){return refreshUiPermissions({force,clearDenied:force})}
 function canViewDashboard(){
   let user=null;
   try{ user=typeof getAuthUser==='function' ? getAuthUser() : null; }catch(_){}
@@ -16,9 +16,7 @@ function canViewDashboard(){
 }
 function roleToken(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toUpperCase().trim()}
 function canManageAssignments(){
-  let authRole='';try{authRole=typeof getAuthUser==='function'?(getAuthUser()?.role_name||getAuthUser()?.roleName||getAuthUser()?.role||''):''}catch(_){ }
-  const raw=String(db.role||'')+' '+String(authRole||'');const token=roleToken(authRole||db.role);
-  return token==='ADMIN'||token==='DIRECTOR'||token==='GIAM DOC'||/ADMIN|DIRECTOR|GI[AÃ]M/.test(raw.toUpperCase());
+  try{return ['ADMIN','DIRECTOR'].includes(getAuthUser()?.role_name)}catch(_){return false}
 }
 // Sửa công trình (hợp đồng, gói thầu, bảng tiến độ...) theo vai trò TẠI công trình đang xem —
 // trước đây xét theo loại tài khoản chung (db.role) nên một người làm nhiều công trình với

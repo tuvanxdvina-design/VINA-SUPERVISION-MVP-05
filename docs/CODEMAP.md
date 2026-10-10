@@ -1,5 +1,11 @@
 # CODEMAP — where things are (read this instead of whole files)
 
+## MVP-05 build 2026-10-10.1 — nút theo quyền
+
+- `js/18-quyen-nut.js`: `permissionButtonPolicy`/`applyPermissionButtons` kiểm nút theo quyền và trạng thái; `permissionRequestKey`/`handlePermissionDenied` ẩn thao tác bị 403; `refreshUiPermissions` tải lại tài khoản và quyền theo công trình, giữ modal/hàng đợi. Nạp sau `17-ho-so-nhan-su.js`, trước glue/API; có trong shell SW.
+- `api.js`: `checkPermissionResponse` xử lý 403 JSON/binary, bỏ qua MUST_CHANGE_PASSWORD. `js/02-quyen.js`: vai trò quản lý so khớp đúng mã; `js/03-cong-trinh.js`: `saveProject` kiểm đúng pid.
+- UI `backend/tests/ui/cases/17-permission-buttons.js`: 11 ca, năm vai trò, workflow, lifecycle và 403 giữ nội dung/tệp. Bảng nút/quyền và trước/sau: [NUT-THEO-QUYEN-MVP05.md](NUT-THEO-QUYEN-MVP05.md).
+
 ## MVP-05 build 2026-10-07.2 — B3/C3
 - `js/11-duyet.js`: `openReviewDecision` tải chi tiết API trước quyết định; `reviewDecisionContext` giữ bản chỉ xem riêng, `showReviewLogFiles`/`showReviewPhotos`/`viewReviewDocument` xem tệp và toàn văn khi không có bản cục bộ. `reviewDecisionLoad` bỏ phản hồi đến muộn.
 - `js/01-core.js`: `showLogFiles`/`showLogPhotos` nhận bản đã tải để mở tệp/ảnh từ hộp duyệt. `js/06-ho-so.js`/`07-bao-cao.js`: `viewDoc`/`viewReport` nhận bản chỉ xem riêng, không ghi đè nháp.

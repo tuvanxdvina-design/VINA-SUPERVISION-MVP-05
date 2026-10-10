@@ -38,7 +38,7 @@ function openProjectSection(page){
   
   renderAll();
 }
-function openProjectDetail(pid){currentProjectId=pid;goPage('projectDetail');renderProjectDetail();void syncDocumentsFromApi();void loadProjectDetailMembers(pid);void loadProjectProgressPlans(pid);if(typeof loadProjectHealth==='function')void loadProjectHealth(pid)}
+function openProjectDetail(pid){currentProjectId=pid;goPage('projectDetail');renderProjectDetail();void loadQualityPermissions(true);void syncDocumentsFromApi();void loadProjectDetailMembers(pid);void loadProjectProgressPlans(pid);if(typeof loadProjectHealth==='function')void loadProjectHealth(pid)}
 function projectRows(arr,forDash=false){
 return `<table><thead><tr><th>M&#x00e3;</th><th>C&#x00f4;ng tr&#x00ec;nh</th><th>&#x110;&#x1ecb;a b&#x00e0;n</th><th>H&#x1ee3;p &#x0111;&#x1ed3;ng</th><th>Ti&#x1ebfn &#x0111;&#x1ed9;</th><th>Tr&#x1ea1;ng th&#x00e1;i</th><th></th></tr></thead><tbody>${arr.map(p=>`<tr class="${forDash?'clickable':''}" ${forDash?`onclick="openProjectDetail('${p.id}')"`:''}><td>${esc(p.code)}</td><td><b>${esc(p.name)}</b>${p._localOnly?` <span class="chip warn" title="${esc(p._syncError||'')}">${p._syncError?'Máy chủ từ chối: '+esc(p._syncError):'Chưa đồng bộ'}</span>`:''}<br><span class="muted">${esc(p.client||'')}</span></td><td>${esc(p.province||'')}</td><td>${p.contractNo?esc(p.contractNo):'<span class="muted">—</span>'}${p.contractValue?`<br><span class="muted">${Number(p.contractValue).toLocaleString('vi-VN')} &#x0111;</span>`:''}</td><td>${p.progress||0}%</td><td>${statusBadge(p.status)}</td><td>${forDash?`<button onclick="event.stopPropagation();openProjectDetail('${p.id}')">Xem</button>`:`${canEditProject(p.id)?`<button onclick="openProject('${p.id}')">S&#x1eed;a</button> `:''}<button onclick="openProjectDetail('${p.id}')">Chi ti&#x1ebft</button>`}</td></tr>`).join('')}</tbody></table>`}
 function renderProjects(){const nb=document.getElementById('newProjectButton');if(nb)nb.style.display=canManageAssignments()?'':'none';let q=(document.getElementById('projectSearch')?.value||'').toLowerCase();document.getElementById('projectsTable').innerHTML=projectRows(db.projects.filter(p=>(p.name+p.code+(p.province||'')+(p.contractNo||'')).toLowerCase().includes(q)))||'<p class="muted">Chưa có công trình.</p>'}
@@ -133,7 +133,7 @@ openModal(pid?'Sửa công trình':'Thêm công trình',`<div class="row">
 if(p.status)document.getElementById('fstatus').value=p.status;
 }
 async function saveProject(pid){
-if(!canEdit())return alert('Bạn không có quyền sửa công trình.');
+if(pid?!canEditProject(pid):!canManageAssignments())return alert('Bạn không có quyền sửa công trình.');
 let p=db.projects.find(x=>x.id===pid);
 const tvgsFile=document.getElementById('fcontractFile')?.files?.[0]||null;const contractorFile=document.getElementById('fcontractorContractFile')?.files?.[0]||null;
 if([tvgsFile,contractorFile].some(f=>f&&f.size>25*1024*1024))return alert('Mỗi tệp hợp đồng tối đa 25 MB.');

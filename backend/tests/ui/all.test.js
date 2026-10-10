@@ -27,3 +27,4 @@ require('./cases/13-edit-conflicts')();
 require('./cases/14-role-permissions')();
 require('./cases/15-review-and-multi-project')();
 require('./cases/16-company-personnel')();
+require('./cases/17-permission-buttons')();

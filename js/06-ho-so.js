@@ -133,7 +133,7 @@ async function syncLegacyLocalDocs(){
    db.docs=db.docs.filter(v=>v.id!==x.id);db.sync=db.sync.filter(q=>!(q.type==='docs'&&q.recordId===x.id));
    audit('SYNC','docs',x.legacyServerId,'Đưa hồ sơ '+(x.code||'')+' lên máy chủ'+(missing.length?' (thiếu tệp đã mất trên thiết bị: '+missing.join(', ')+')':''));
    if(missing.length)alert('Hồ sơ '+(x.code||x.name)+' đã lên máy chủ nhưng '+missing.length+' tệp không còn trên thiết bị (bộ nhớ trình duyệt đã đầy trước đây): '+missing.join(', ')+'. Hãy mở hồ sơ trên máy chủ và tải lại các tệp này.');
-  }catch(error){x.lastError=(/failed to fetch|networkerror|load failed/i.test(error.message)?'Mất kết nối tới máy chủ khi đang tải tệp (sẽ tự thử lại)':error.message)+(error.status===403?' — nếu tài khoản là Admin/Giám đốc thì máy chủ đang chạy mã cũ, cần khởi động lại backend':'');console.warn('Chưa đưa được hồ sơ lên máy chủ:',x.code,error.message)}
+  }catch(error){x.lastError=(/failed to fetch|networkerror|load failed/i.test(error.message)?'Mất kết nối tới máy chủ khi đang tải tệp (sẽ tự thử lại)':error.message);console.warn('Chưa đưa được hồ sơ lên máy chủ:',x.code,error.message)}
  }
  persistLocal();
 }

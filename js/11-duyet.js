@@ -8,7 +8,7 @@ const REVIEW_ACTION={SUBMIT:'Gửi duyệt',CONFIRM:'Xác nhận (tự duyệt �
 function isReviewer(){
  if(canManageAssignments())return true;
  if([...qualityPermissionCache.values()].some(v=>(v.permissions||[]).map(x=>String(x).toUpperCase()).includes('APPROVE')))return true;
- return !!inboxData?.can_review;
+ return false;
 }
 function applyInboxNavVisibility(){
  const show=isReviewer();const nav=document.querySelector('nav button[data-page="inbox"]');if(nav)nav.style.display=show?'':'none';
