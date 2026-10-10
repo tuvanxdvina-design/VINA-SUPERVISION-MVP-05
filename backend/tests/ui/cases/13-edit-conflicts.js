@@ -122,6 +122,8 @@ module.exports = function register() {
         return route.continue();
       });
       await page.evaluate(id=>saveDoc(id),record.id);
+      // Lượt tự đồng bộ có thể đang chạy; chỉ đối chiếu sau khi gửi kết thúc.
+      await page.waitForFunction(id=>!documentSyncRunning&&!db.sync.some(x=>x.recordId===id&&x.sending),record.id);
       assert.equal(patches,1);
       assert.equal(await page.evaluate(id=>queuedFileCount('document',id),record.id),1);
       assert.equal(await page.locator('#modal.show').count(),1);

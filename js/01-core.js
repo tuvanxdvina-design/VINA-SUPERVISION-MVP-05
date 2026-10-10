@@ -52,12 +52,6 @@ function enforceDashboardAccess(){
     document.querySelector('nav button[data-page="projects"]')?.classList.add('active');
   }
 }
-function canEdit(){return [
-'\u0047i\u00e1m \u0111\u1ed1c',
-'Admin',
-'\u0054r\u01b0\u1edfng TVGS',
-'K\u1ef9 s\u01b0 TVGS'
-].includes(db.role)}
 function canCreateLogIn(projectId){if(canManageAssignments())return true;return qualityPermissions(projectId).includes('CREATE')}
 function isPrivilegedLogEditor(){return canManageAssignments()}
 function renderSelects(){['logProject','issueProject','docProject'].forEach(sid=>{let el=document.getElementById(sid);if(el){let old=el.value;el.innerHTML='<option value="">Tất cả công trình</option>'+projectsOptions(old);el.value=old||''}})}
@@ -159,7 +153,7 @@ enforceDashboardAccess();renderSelects();if(canViewDashboard())renderDashboard()
 document.getElementById('role').value=db.role;updateNet();renderHeaderUser();
 if(currentProjectId&&document.getElementById('projectDetail').classList.contains('active'))renderProjectDetail();
 }
-function openModal(title,body){if(window.__forcePw)return;document.querySelector('#modal .modalbox')?.classList.remove('wide');document.getElementById('mtitle').textContent=title;document.getElementById('mbody').innerHTML=body;document.getElementById('modal').classList.add('show')}
+function openModal(title,body){if(window.__forcePw)return;document.querySelector('#modal .modalbox')?.classList.remove('wide');document.getElementById('mtitle').textContent=title;document.getElementById('mbody').innerHTML=body;document.getElementById('modal').classList.add('show');if(typeof applyPermissionButtons==='function')applyPermissionButtons()}
 function closeModal(){if(window.__forcePw)return;document.getElementById('modal').classList.remove('show')}
 function toDataURL(file){return new Promise(r=>{let a=new FileReader();a.onload=()=>r(a.result);a.readAsDataURL(file)})}
 const LEGAL_FILE_SLOTS=[['Hồ sơ dự thầu / HSĐX','d_hs_sdt','.pdf,.doc,.docx,.xls,.xlsx,.zip,image/*',true],['Đề cương giám sát','d_de_cuong','.pdf,.doc,.docx',true],['Biểu mẫu kèm theo đề cương giám sát','d_bieu_mau','.pdf,.doc,.docx,.xls,.xlsx,.zip',true],['Quyết định phê duyệt tổ tư vấn giám sát','d_quyet_dinh','.pdf,.doc,.docx,image/*',true],['Chứng chỉ của các thành viên tổ giám sát','d_chung_chi','.pdf,.doc,.docx,.zip,image/*',true],['Tài liệu khác','d_khac','*/*',true]];
@@ -185,6 +179,7 @@ async function openServerFile(apiPath,meta,download){
  const win=download?null:window.open('','_blank');
  try{
   const res=await fetch(API_BASE+apiPath,{headers:{Authorization:'Bearer '+getAuthToken()}});
+  await checkPermissionResponse(res,API_BASE+apiPath);
   if(!res.ok){let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error(m)}
   const f=await safeFileBlob(res);if(!f.inline){download=true;if(win)win.close()}
   const url=URL.createObjectURL(f.blob);

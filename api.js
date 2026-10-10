@@ -46,9 +46,17 @@ async function fetchWithDeadline(url,options={},timeoutMs=30000){
  const abort=()=>controller.abort();
  if(options.signal?.aborted)abort();else options.signal?.addEventListener('abort',abort,{once:true});
  const timer=setTimeout(()=>{expired=true;controller.abort()},timeoutMs);
- try{return await fetch(url,{...options,signal:controller.signal})}
+ try{const response=await fetch(url,{...options,signal:controller.signal});await checkPermissionResponse(response,url,options);return response}
  catch(error){if(expired)throw Object.assign(new Error('Kết nối quá lâu. Bản nhập và tệp chờ vẫn được giữ; ứng dụng sẽ thử lại khi có mạng.'),{code:'NETWORK_TIMEOUT'});throw error}
  finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort)}
+}
+async function checkPermissionResponse(response,url,options={}){
+ if(response.status!==403||response.permissionNotice||typeof handlePermissionDenied!=='function')return;
+ const base=new URL(API_BASE,window.location.href),target=new URL(url,window.location.href);
+ if(target.origin!==base.origin||!target.pathname.startsWith(base.pathname+'/'))return;
+ let code='';try{code=(await response.clone().json()).code||''}catch(_){}
+ if(code==='MUST_CHANGE_PASSWORD')return;
+ handlePermissionDenied(target.pathname.slice(base.pathname.length),options);response.permissionNotice=true;
 }
 
 async function apiRequest(path, options = {}) {
@@ -83,6 +91,10 @@ async function apiRequest(path, options = {}) {
     } catch (_) {}
     // Tài khoản đang dùng mật khẩu tạm: bắt đổi mật khẩu trước khi dùng tiếp
     if (code === 'MUST_CHANGE_PASSWORD' && typeof window.forcePasswordChange === 'function') window.forcePasswordChange();
+    if(response.status===403&&code!=='MUST_CHANGE_PASSWORD'&&typeof handlePermissionDenied==='function'){
+      if(!response.permissionNotice)handlePermissionDenied(path,options);
+      message='Quyền của bạn đã thay đổi';
+    }
 
     const error = new Error(message);
     error.status = response.status;
@@ -263,7 +275,7 @@ async function syncPendingDocuments(){
         save();
         if(typeof queuedFiles==='function')for(const file of await queuedFiles('document',item.recordId)){
           const response=await fetch(API_BASE+'/documents/'+encodeURIComponent(item.recordId)+'/files?category='+encodeURIComponent(file.category||'Tài liệu')+'&name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob});
-          if(!response.ok)throw new Error('Chưa tải được tệp '+file.name+' (HTTP '+response.status+')');
+          if(!response.ok){await checkPermissionResponse(response,response.url,{method:'POST'});throw new Error('Chưa tải được tệp '+file.name+' (HTTP '+response.status+')');}
           // Count only our acknowledged writes, never adopt a later reader's version for a draft.
           item.savedResult.row_version=Number(item.savedResult.row_version)+1;
           await removeQueuedFile(file.id);
@@ -495,7 +507,7 @@ async function uploadLogAttachments(local, serverId) {
     if (doc.uploaded || !doc.data) continue;
     const blob = await (await fetch(doc.data)).blob();
     const res = await fetchWithDeadline(API_BASE + '/daily-logs/' + encodeURIComponent(serverId) + '/files?name=' + encodeURIComponent(doc.name || 'tai-lieu'), { method: 'POST', headers: { Authorization: 'Bearer ' + getAuthToken(), 'Content-Type': doc.type || blob.type || 'application/octet-stream' }, body: blob },120000);
-    if (!res.ok) { let m = 'HTTP ' + res.status; try { m = (await res.json()).error || m; } catch (_) {} throw new Error('Tài liệu "' + doc.name + '": ' + m); }
+    if (!res.ok) { await checkPermissionResponse(res,res.url,{method:'POST'}); let m = 'HTTP ' + res.status; try { m = (await res.json()).error || m; } catch (_) {} throw new Error('Tài liệu "' + doc.name + '": ' + m); }
     doc.uploaded = true; delete doc.data;
   }
   if(typeof queuedFiles==='function'){
@@ -503,7 +515,7 @@ async function uploadLogAttachments(local, serverId) {
     for(const file of pending){
       const route=file.kind==='PHOTO'?'/attachments-binary':'/files';
       const res=await fetchWithDeadline(API_BASE+'/daily-logs/'+encodeURIComponent(serverId)+route+'?name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob},120000);
-      if(!res.ok){let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error('Tệp "'+file.name+'": '+m)}
+      if(!res.ok){await checkPermissionResponse(res,res.url,{method:'POST'});let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error('Tệp "'+file.name+'": '+m)}
       await removeQueuedFile(file.id);
     }
   }
@@ -513,7 +525,7 @@ async function syncQueuedProjectFiles(projectId){
  if(typeof queuedFiles!=='function')return;const pending=await queuedFiles('project',projectId);
  for(const file of pending.filter(f=>f.kind!=='PROGRESS_BASELINE')){
   const res=await fetch(API_BASE+'/projects/'+encodeURIComponent(projectId)+'/files?category='+encodeURIComponent(file.category)+'&name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob});
-  if(!res.ok){let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error('Tệp "'+file.name+'": '+m)}
+  if(!res.ok){await checkPermissionResponse(res,res.url,{method:'POST'});let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error('Tệp "'+file.name+'": '+m)}
   await removeQueuedFile(file.id);
  }
 }
@@ -522,7 +534,7 @@ async function syncQueuedIssueFiles(issueId){
  if(typeof queuedFiles!=='function')return;const pending=await queuedFiles('issue',issueId);
  for(const file of pending){
   const res=await fetch(API_BASE+'/issues/'+encodeURIComponent(issueId)+'/files?name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file.blob});
-  if(!res.ok){let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error('Tệp "'+file.name+'": '+m)}
+  if(!res.ok){await checkPermissionResponse(res,res.url,{method:'POST'});let m='HTTP '+res.status;try{m=(await res.json()).error||m}catch(_){}throw new Error('Tệp "'+file.name+'": '+m)}
   await removeQueuedFile(file.id);
  }
 }

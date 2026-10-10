@@ -7,6 +7,8 @@ Bản này là **bản sao riêng của MVP-03** (fork ngày 09/10/2026) để s
 Construction-supervision (TVGS) management app for a Vietnamese consulting firm. UI text is Vietnamese; the user writes Vietnamese — answer in Vietnamese, direct, with pushback.
 **Do not re-read whole files.** Use this guide + `docs/CODEMAP.md`, then Grep for the function you need and Read only that range.
 
+- Nút theo quyền (10/10/2026): `js/18-quyen-nut.js` cập nhật nút khi online/pageshow/visible/đổi công trình và HTTP 403; giữ modal, bản nhập và tệp chờ. `canManageAssignments` chỉ nhận `role_name` ADMIN/DIRECTOR; sửa công trình dùng `canEditProject(pid)`, không dùng `canEdit` cũ. Bảng đối chiếu API và file trước/sau: `docs/NUT-THEO-QUYEN-MVP05.md`; ca Chrome `17-permission-buttons.js`. Không đổi quyền máy chủ.
+
 ## Stack & layout
 - Backend: Node 24 + Express 5 + PostgreSQL 14 (container lấy động bằng `docker compose ps -q postgres`, cổng máy `5434`, DB `vina_supervision_mvp04`, app user `vina_user`). Entry `backend/server.js` → `backend/src/app.js`.
   - `src/routes/*.js` (HTTP, auth/permission checks) → `src/services/*.js` (SQL). No ORM; raw `pool.query`.

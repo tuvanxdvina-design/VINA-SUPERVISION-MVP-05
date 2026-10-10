@@ -220,3 +220,27 @@ Tái hiện trước sửa: hai lần Lưu đồng thời trong Sửa nháp offl
 # 09/10/2026 — tạm dừng nghiệm thu Android
 
 Theo yêu cầu người dùng, dừng thử Android, giữ dữ liệu/bản nhập. Người dùng xác nhận camera, danh sách/xem rõ ảnh trong Sửa, ca đóng ứng dụng đủ 2 ảnh và 0/0, chặn gửi duyệt đúng, mất mạng nhiều giờ giữ đủ hai ca/ảnh và không trùng. Tự phục hồi Tailscale OPPO F11 Android 9 còn lỗi; quyền chạy nền và VPN luôn bật chưa giải quyết theo các lượt thử. Ca mạng yếu/ngắt tải ảnh chỉ đạt mô phỏng PC; iPhone chỉ xác nhận HTTP 200. Không chốt Việc 6 đạt toàn bộ. Chẩn đoán Android cuối còn 2 PENDING CREATE của hai báo cáo khác nhau; chưa xác nhận về 0 sau đó. Chi tiết runtime-logs/NGHIEM-THU-VIEC6-20261008.md; chưa có định nghĩa Việc 7 để triển khai.
+
+## 10/10/2026 — Nút theo quyền, build ứng viên 2026-10-10.1-mvp05
+
+Nhánh `codex/mvp05-nut-theo-quyen`, tạo từ main/origin main `ea9230986935a3fad8f878c7f612cfce823cdd86`. Không đổi quyền máy chủ hoặc migration.
+
+| Bộ kiểm thử | Kết quả | Log trong runtime-logs |
+|---|---|---|
+| API hồi quy | 46/46 | button-tests-regression.txt |
+| Phân quyền API | 22/22 | button-tests-permissions.txt |
+| Xung đột/phiên bản | 6/6 | button-tests-conflict.txt |
+| Hồ sơ nhân sự | 11/11 | button-tests-personnel.txt |
+| JavaScript unit | 6/6 | button-tests-jsUnits.txt |
+| Chrome toàn bộ | 100/100 | button-tests-ui.txt |
+| **Tổng** | **191/191** | DB và uploads thử riêng |
+| PWA, shell ngoại tuyến | Đạt | button-tests-pwa.txt |
+| Cú pháp frontend/build | 0 lỗi | check-frontend.js: 26 tệp js/ |
+
+Thêm 11 ca giao diện cho ADMIN, DIRECTOR, TVGS_LEAD, TVGS_MEMBER, MANAGER; kiểm trạng thái duyệt/khóa, sửa công trình theo pid, quyền không suy từ tên, online/pageshow/visible/đổi công trình và 403 thực giữ chữ/file/hàng đợi.
+
+Lượt đầu UI 95/100: sửa nút Xem xét dùng mục duyệt máy chủ thay nháp riêng, sửa selector Sửa bắt nhầm Mở lại. Lượt sau 99/100: ca tải tệp đọc số tệp trong khi đồng bộ nền đang gửi; bổ sung chờ lượt gửi kết thúc, giữ nguyên kiểm tra không PATCH/tải trùng. Lượt cuối toàn bộ 100/100 (403,926 giây). Bước Khóa hồ sơ Giám đốc từng timeout trong nhóm nhỏ, chạy lại đạt; ca mới chờ tải danh sách hồ sơ trước khi kiểm workflow. Log lượt 99/100 được giữ ở button-tests-ui-before-wait.txt. Không thay cơ chế đồng bộ để xử lý thời điểm kiểm thử.
+
+Đối chiếu chỉ đọc: 14 bảng dữ liệu công trình thật nguyên vẹn, lịch sử gộp và scan giữ nguyên; chỉ còn 3 công trình thật, tài khoản/hồ sơ thử V7 không hoạt động. /health vận hành OK, database connected, build vẫn 2026-10-09.8-mvp05. Chưa commit/push/merge, chưa restart backend; chưa nghiệm thu tay build ứng viên trên điện thoại. Không tiếp tục nghiệm thu Tailscale Android đã tạm dừng.
+
+Bảng nút → hàm → quyền máy chủ và danh sách file trước/sau: [NUT-THEO-QUYEN-MVP05.md](docs/NUT-THEO-QUYEN-MVP05.md).
